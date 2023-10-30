@@ -1,0 +1,19 @@
+class Structure {
+	int var;
+	int var2;
+
+	int Function(int input){
+		var = input;
+		var2 = var / 2;
+
+		return var;
+	}
+};
+
+int main(){	
+	Structure obj;
+	int variable;
+	variable = obj.Function(23);
+
+	return 0;
+}
