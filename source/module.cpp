@@ -85,6 +85,8 @@ namespace mlang {
 		{"double", Token::Type::DOUBLE},
 
 		{"unsigned", Token::Type::UNSIGNED},
+		{"const", Token::Type::CONST},
+
 		{"enum", Token::Type::ENUM},
 		{"class", Token::Type::CLASS},
 
@@ -837,44 +839,67 @@ namespace mlang {
 		return stmt;
 	}
 	Statement *Module::ParseVarDecl() {
-		auto typeTok = NextToken();
+		auto typeTok = GetToken();
 		if (!(typeTok->type >= Token::Type::TYPES_BEGIN && typeTok->type <= Token::Type::TYPES_END) && 
-			typeTok->type != Token::Type::UNSIGNED && typeTok->type != Token::Type::IDENTIFIER) {
+			typeTok->type != Token::Type::UNSIGNED && typeTok->type != Token::Type::CONST && 
+			typeTok->type != Token::Type::IDENTIFIER) {
 			std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " "  << "Invalid type specified at line " << typeTok->row << "[" << typeTok->col << "]\n";
 			errCode = RespCode::ERR;
 			return nullptr;
 		}
 
-		// Deals with modifiers (UNSIGNED...)
-		if (typeTok->type == Token::Type::UNSIGNED) {
-			// Checks if its unsigned
-			if (typeTok->type == Token::Type::UNSIGNED) {
-				auto modifierToken = typeTok;
-				typeTok = NextToken();
-				if (!(typeTok->type >= Token::Type::TYPES_BEGIN && typeTok->type <= Token::Type::TYPES_END)) {
-					std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " "  << "Invalid type specified at line " << typeTok->row << "[" << typeTok->col << "]\n";
-					errCode = RespCode::ERR;
-					return nullptr;
+		int mods = 0;
+		bool isUnsigned = false;
+		if (typeTok->type == Token::Type::UNSIGNED || typeTok->type == Token::Type::CONST) {
+			while (typeTok->type == Token::Type::UNSIGNED || typeTok->type == Token::Type::CONST) {
+				if (typeTok->type == Token::Type::UNSIGNED) {
+					if (isUnsigned) {
+						errCode = RespCode::ERR;
+						return nullptr;
+					}
+
+					isUnsigned = true;
+
+					continue;
 				}
 
 				switch (typeTok->type) {
-					case Token::Type::INT8:
-						typeTok->type = Token::Type::UINT8;
-						break;
-					case Token::Type::INT16:
-						typeTok->type = Token::Type::UINT16;
-						break;
-					case Token::Type::INT32:
-						typeTok->type = Token::Type::UINT32;
-						break;
-					case Token::Type::INT64:
-						typeTok->type = Token::Type::UINT64;
+					case Token::Type::CONST:
+						mods |= static_cast<int>(ScriptObject::Modifier::CONST);
 						break;
 					default:
-						std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " "  << "Invalid '" << modifierToken->val << "' before '" << typeTok->val << "'\nAt line " << modifierToken->row << "[" << modifierToken->col << "]\n";
 						errCode = RespCode::ERR;
+						std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " " <<
+							"Invalid value '" << GetToken()->val << "' specified at line " << typeTok->row << "[" << typeTok->col << "]\n";
 						return nullptr;
 				}
+
+				typeTok = NextToken();
+			}
+		}
+		else {
+			NextToken();
+		}
+
+		// Deals with modifiers (UNSIGNED...)
+		if (isUnsigned) {
+			switch (typeTok->type) {
+				case Token::Type::INT8:
+					typeTok->type = Token::Type::UINT8;
+					break;
+				case Token::Type::INT16:
+					typeTok->type = Token::Type::UINT16;
+					break;
+				case Token::Type::INT32:
+					typeTok->type = Token::Type::UINT32;
+					break;
+				case Token::Type::INT64:
+					typeTok->type = Token::Type::UINT64;
+					break;
+				default:
+					std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " Invalid unsigned next to type" << "\n";//"Invalid '" << modifierToken->val << "' before '" << typeTok->val << "'\nAt line " << modifierToken->row << "[" << modifierToken->col << "]\n";
+					errCode = RespCode::ERR;
+					return nullptr;
 			}
 		}
 
@@ -891,8 +916,15 @@ namespace mlang {
 			NextToken();
 			expr = ParseExpression();
 		}
+		else if(mods & static_cast<int>(ScriptObject::Modifier::CONST) && typeTok->type != Token::Type::IDENTIFIER) {
+			std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " " << "Constant variable '" << identTok->val << "' uninitialized at line " << identTok->row << "[" << identTok->col << "]\n";
+			errCode = RespCode::ERR;
+			return nullptr;
+		}
 
-		return new VarDeclStmt(*typeTok, *identTok, expr);
+		auto ret = new VarDeclStmt(*typeTok, *identTok, expr);
+		ret->modifiers = mods;
+		return ret;
 	}
 	Statement *Module::ParseVarAssign() {
 		auto identTok = NextToken();
@@ -935,7 +967,7 @@ namespace mlang {
 		auto tok = GetToken();
 		auto type = engine->GetScope()->FindTypeInfoByName(tok->val);
 		if ((tok->type >= Token::Type::TYPES_BEGIN && tok->type <= Token::Type::TYPES_END) || 
-			tok->type == Token::Type::UNSIGNED || type.code == RespCode::SUCCESS) {
+			tok->type == Token::Type::UNSIGNED || tok->type == Token::Type::CONST || type.code == RespCode::SUCCESS) {
 			if (tok->type == Token::Type::CLASS) {
 				if (ParseClass() != RespCode::SUCCESS) {
 					std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " " << "Class declaration error at line " << tok->row << "[" << tok->col << "]\n";
@@ -948,9 +980,9 @@ namespace mlang {
 			}
 			NextToken();
 			bool unsignedFlag = false;
-			if (tok->type == Token::Type::UNSIGNED) {
+			if (tok->type == Token::Type::UNSIGNED || tok->type == Token::Type::CONST) {
 				tok = NextToken();
-				if (!(tok->type >= Token::Type::TYPES_BEGIN && tok->type <= Token::Type::TYPES_END)) {
+				if (!(tok->type >= Token::Type::TYPES_BEGIN && tok->type <= Token::Type::TYPES_END) && tok->type != Token::Type::IDENTIFIER) {
 					std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " "  << "Invalid type specified at line " << tok->row << "[" << tok->col << "]\n";
 					errCode = RespCode::ERR;
 					return nullptr;
@@ -1037,7 +1069,7 @@ namespace mlang {
 			return RespCode::ERR;
 		}
 
-		if (dest->IsRef()) {
+		if (dest->IsModifier(ScriptObject::Modifier::REFERENCE)) {
 			dest = src;	// Simple memory copy
 			src->refCount++;
 		}
@@ -1558,6 +1590,7 @@ namespace mlang {
 			return RespCode::ERR;
 		}
 		auto obj = new ScriptObject(engine, typeFind.value());
+		obj->modifiers = static_cast<ScriptObject::Modifier>(stmt->modifiers);
 		obj->identifier = stmt->ident.val;
 		scope->RegisterObject(obj);
 
@@ -1600,7 +1633,12 @@ namespace mlang {
 		}
 
 		ScriptObject *foundObj = std::get<ScriptObject *>(nameResolution.value());
-		
+		if (foundObj->IsModifier(ScriptObject::Modifier::CONST)) {
+			std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " " <<
+				"Assigning a value to a const object '" << foundObj->GetName() << "' at line " << stmt->ident.row << "[" << stmt->ident.col << "]\n";
+			return RespCode::ERR;
+		}
+
 		/*if (source) {
 			if (std::holds_alternative<ScriptObject *>(source.value())) {
 				std::cout << stmt->ident.val << " set to " << dynamic_cast<ValueExpr *>(stmt->expr)->val.val << "\n";

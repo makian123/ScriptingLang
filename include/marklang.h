@@ -46,6 +46,7 @@ namespace mlang {
 
 		RespCode NewModule(const std::string &name);
 		Response<Module*> GetModule(const std::string &name) const;
+		RespCode DestroyModule(const std::string &name);
 
 		Scope *GetScope() const;
 		void SetScope(Scope *scope);
@@ -87,6 +88,8 @@ namespace mlang {
 			TYPES_END = CLASS,
 
 			UNSIGNED,					// unsigned
+
+			CONST,						// const
 
 			SEMICOLON,					// ;
 			COMMA,						// ,
@@ -187,6 +190,7 @@ namespace mlang {
 		Statement(Type type) : type(type) {}
 	};
 	struct VarDeclStmt : public Statement {
+		int modifiers = 0;
 		Token type;
 		Token ident;
 		Expression *expr;
@@ -351,6 +355,12 @@ namespace mlang {
 		inline Engine *GetEngine() const { return engine; }
 	};
 	class ScriptObject final {
+		public:
+		enum class Modifier: int {
+			CONST = (1 << 0),
+			REFERENCE = (1 << 1)
+		};
+
 		private:
 		TypeInfo *type = nullptr;
 		Engine *engine;
@@ -358,8 +368,9 @@ namespace mlang {
 		void *ptr = nullptr;
 		std::unordered_map<std::string, ScriptObject *> members;
 		Scope *classScope = nullptr;
-		bool isRef, shouldDealloc;
+		bool shouldDealloc;
 		size_t refCount = 1;
+		Modifier modifiers;
 
 		public:
 		friend class Engine;
@@ -367,14 +378,17 @@ namespace mlang {
 		friend class Scope;
 		friend class TypeInfo;
 
-		ScriptObject(Engine *engine, TypeInfo *type, bool reference = false, bool shouldAlloc = true);
+		ScriptObject(Engine *engine, TypeInfo *type, Modifier mods = (Modifier)0, bool shouldAlloc = true);
 		~ScriptObject();
 
 		TypeInfo const *GetType() const { return type; }
 		const std::string &GetName() const { return identifier; }
-		bool IsRef() const { return isRef; }
 
 		std::optional<ScriptObject *> GetMember(const std::string &name) const;
+
+		bool IsModifier(Modifier mod) const { return static_cast<int>(modifiers) & static_cast<int>(mod); }
+		void SetType(Modifier mod) { modifiers = static_cast<Modifier>(static_cast<int>(modifiers) | static_cast<int>(mod)); }
+		void UnsetType(Modifier mod) { modifiers = static_cast<Modifier>(static_cast<int>(modifiers) & ~static_cast<int>(mod)); }
 
 		void SetAddress(void *ptr);
 		void *GetAddressOfObj() const { return ptr; }
@@ -387,8 +401,10 @@ namespace mlang {
 		private:
 		std::string name;
 		size_t paramCount;
+
 		FuncStmt *func = nullptr;
 		ScriptObject *object = nullptr;
+
 		TypeInfo *returnType;
 		bool isMethod;
 

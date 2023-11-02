@@ -2,9 +2,9 @@
 #include <iostream>
 
 namespace mlang {
-	ScriptObject::ScriptObject(Engine *engine, TypeInfo *type, bool reference, bool alloc)
-		: engine(engine), type(type), isRef(reference), shouldDealloc(alloc) {
-		if (!isRef) {
+	ScriptObject::ScriptObject(Engine *engine, TypeInfo *type, Modifier mods, bool alloc)
+		: engine(engine), type(type), modifiers(mods), shouldDealloc(alloc) {
+		if (!IsModifier(Modifier::REFERENCE)) {
 			if (alloc) {
 				ptr = new char[type->Size()];
 			}
@@ -12,7 +12,7 @@ namespace mlang {
 			if (type->IsClass()) {
 				classScope = engine->GetScope()->AddChild(static_cast<int>(Scope::Type::CLASS));
 				for (auto &[memberName, memberType] : type->members) {
-					members[memberName] = new ScriptObject(engine, memberType, false, false);
+					members[memberName] = new ScriptObject(engine, memberType, static_cast<Modifier>(0), false);
 					if (alloc) {
 						members[memberName]->SetAddress(reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(ptr) + memberType->Offset()));
 					}
@@ -26,7 +26,7 @@ namespace mlang {
 	}
 	ScriptObject::~ScriptObject() {
 		if (refCount) { refCount--; }
-		if (!isRef && !refCount) {
+		if (!IsModifier(Modifier::REFERENCE) && !refCount) {
 			for (auto &[ident, member] : members) {
 				//allocator.destroy(reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(ptr) + member->type->Offset()));
 			}

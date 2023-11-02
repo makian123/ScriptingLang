@@ -45,6 +45,15 @@ namespace mlang {
 
 		return Response(modules.at(name).get(), RespCode::SUCCESS);
 	}
+	RespCode Engine::DestroyModule(const std::string &name) {
+		if (modules.find(name) == modules.end()) {
+			std::cout << "Module '" << name << "' doesn't exist\n";
+			return RespCode::ERR;
+		}
+
+		modules.erase(name);
+		return RespCode::SUCCESS;
+	}
 
 	Scope *Engine::GetScope() const {
 		return currScope;
