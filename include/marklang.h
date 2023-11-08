@@ -367,6 +367,7 @@ namespace mlang {
 		std::string identifier;
 		void *ptr = nullptr;
 		std::unordered_map<std::string, ScriptObject *> members;
+		ScriptObject *parentClass;
 		Scope *classScope = nullptr;
 		bool shouldDealloc;
 		size_t refCount = 1;
@@ -378,7 +379,7 @@ namespace mlang {
 		friend class Scope;
 		friend class TypeInfo;
 
-		ScriptObject(Engine *engine, TypeInfo *type, Modifier mods = (Modifier)0, bool shouldAlloc = true);
+		ScriptObject(Engine *engine, TypeInfo *type, Modifier mods = (Modifier)0, bool shouldAlloc = true, ScriptObject *parentClass = nullptr);
 		~ScriptObject();
 
 		TypeInfo const *GetType() const { return type; }
@@ -406,15 +407,15 @@ namespace mlang {
 		ScriptObject *object = nullptr;
 
 		TypeInfo *returnType;
-		bool isMethod;
+		bool isMethod, isConstMethod;
 
 		public:
 		friend class Engine;
 		friend class Module;
 		friend class Scope;
 
-		ScriptFunc(const std::string &name, size_t params, FuncStmt *stmt = nullptr, TypeInfo *ret = nullptr, bool method = false)
-			: name(name), paramCount(params), func(stmt), returnType(ret), isMethod(method) {}
+		ScriptFunc(const std::string &name, size_t params, FuncStmt *stmt = nullptr, TypeInfo *ret = nullptr, bool method = false, bool constMethod = false)
+			: name(name), paramCount(params), func(stmt), returnType(ret), isMethod(method), isConstMethod(constMethod) {}
 
 		void SetClassObject(ScriptObject *obj);
 		ScriptObject *GetScriptObject() const { return object; }

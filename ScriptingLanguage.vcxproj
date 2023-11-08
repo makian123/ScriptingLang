@@ -24,6 +24,7 @@
   <ItemGroup>
     <ClCompile Include="source\engine.cpp" />
     <ClCompile Include="source\module.cpp" />
+    <ClCompile Include="source\parser.cpp" />
     <ClCompile Include="source\scope.cpp" />
     <ClCompile Include="source\scriptfunc.cpp" />
     <ClCompile Include="source\scriptobject.cpp" />

@@ -2,8 +2,8 @@
 #include <iostream>
 
 namespace mlang {
-	ScriptObject::ScriptObject(Engine *engine, TypeInfo *type, Modifier mods, bool alloc)
-		: engine(engine), type(type), modifiers(mods), shouldDealloc(alloc) {
+	ScriptObject::ScriptObject(Engine *engine, TypeInfo *type, Modifier mods, bool alloc, ScriptObject *parentClass)
+		: engine(engine), type(type), modifiers(mods), shouldDealloc(alloc), parentClass(parentClass) {
 		if (!IsModifier(Modifier::REFERENCE)) {
 			if (alloc) {
 				ptr = new char[type->Size()];
@@ -12,11 +12,12 @@ namespace mlang {
 			if (type->IsClass()) {
 				classScope = engine->GetScope()->AddChild(static_cast<int>(Scope::Type::CLASS));
 				for (auto &[memberName, memberType] : type->members) {
-					members[memberName] = new ScriptObject(engine, memberType, static_cast<Modifier>(0), false);
+					members[memberName] = new ScriptObject(engine, memberType, static_cast<Modifier>(0), false, parentClass);
 					if (alloc) {
 						members[memberName]->SetAddress(reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(ptr) + memberType->Offset()));
 					}
 					members[memberName]->identifier = memberName;
+					members[memberName]->parentClass = this;
 
 					classScope->RegisterObject(members[memberName]);
 				}
