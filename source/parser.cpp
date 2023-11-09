@@ -92,15 +92,27 @@ namespace mlang {
 		char lookahead = ((currIdx + 1) < code.size() ? code[currIdx + 1] : '\0');
 		switch (code[currIdx]) {
 			case '+': {
+				if (lookahead == '=') {
+					return Token(Token::Type::ASSIGN_PLUS, std::string{ code[currIdx++], code[currIdx++] }, currRow, currCol++);
+				}
 				return Token(Token::Type::PLUS, std::string{ code[currIdx++] }, currRow, currCol++);
 			}
 			case '-': {
+				if (lookahead == '=') {
+					return Token(Token::Type::ASSIGN_MINUS, std::string{ code[currIdx++], code[currIdx++] }, currRow, currCol++);
+				}
 				return Token(Token::Type::MINUS, std::string{ code[currIdx++] }, currRow, currCol++);
 			}
 			case '*': {
+				if (lookahead == '=') {
+					return Token(Token::Type::ASSIGN_MUL, std::string{ code[currIdx++], code[currIdx++] }, currRow, currCol++);
+				}
 				return Token(Token::Type::STAR, std::string{ code[currIdx++] }, currRow, currCol++);
 			}
 			case '/': {
+				if (lookahead == '=') {
+					return Token(Token::Type::ASSIGN_DIV, std::string{ code[currIdx++], code[currIdx++] }, currRow, currCol++);
+				}
 				return Token(Token::Type::SLASH, std::string{ code[currIdx++] }, currRow, currCol++);
 			}
 
@@ -133,6 +145,9 @@ namespace mlang {
 				return Token(Token::Type::DOT, std::string{ code[currIdx++] }, currRow, currCol++);
 			}
 			case '=': {
+				if (lookahead == '=') {
+					return Token(Token::Type::EQ, std::string{ code[currIdx++], code[currIdx++] }, currRow, currCol++);
+				}
 				return  Token(Token::Type::ASSIGN, std::string{ code[currIdx++] }, currRow, currCol++);
 			}
 
@@ -831,7 +846,13 @@ namespace mlang {
 		}
 
 		auto assignType = NextToken();
-		if (assignType->type != Token::Type::ASSIGN && assignType->type != Token::Type::DOT) {
+		if (
+			assignType->type != Token::Type::ASSIGN && 
+			assignType->type != Token::Type::ASSIGN_PLUS && 
+			assignType->type != Token::Type::ASSIGN_MINUS &&
+			assignType->type != Token::Type::ASSIGN_DIV &&
+			assignType->type != Token::Type::ASSIGN_MUL &&
+			assignType->type != Token::Type::DOT) {
 			std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " " << "Invalid value '" << assignType->val << "' at line " << assignType->row << "[" << assignType->col << "]\n";
 			errCode = RespCode::ERR;
 			return nullptr;
@@ -854,6 +875,25 @@ namespace mlang {
 		if (!expr) {
 			errCode = RespCode::ERR;
 			return nullptr;
+		}
+
+		if (assignType->type != Token::Type::ASSIGN && assignType->type != Token::Type::DOT) {
+			Token tok;
+			switch (assignType->type) {
+				case Token::Type::ASSIGN_PLUS:
+					tok = Token(Token::Type::PLUS);
+					break;
+				case Token::Type::ASSIGN_MINUS:
+					tok = Token(Token::Type::MINUS);
+					break;
+				case Token::Type::ASSIGN_MUL:
+					tok = Token(Token::Type::STAR);
+					break;
+				case Token::Type::ASSIGN_DIV:
+					tok = Token(Token::Type::SLASH);
+					break;
+			}
+			expr = new BinaryExpr(new ValueExpr(*identTok), tok, expr);
 		}
 
 		return new VarAssignStmt(*identTok, expr);

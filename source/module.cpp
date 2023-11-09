@@ -593,6 +593,7 @@ namespace mlang {
 		return RespCode::SUCCESS;
 	}
 	RespCode Module::RunFunc(FuncStmt *stmt, std::vector<Expression *> params) {
+		auto scope = engine->GetScope();
 		engine->SetScope(stmt->funcScope);
 		for (size_t i = 0; i < stmt->params.size(); ++i) {
 			auto funcParam = dynamic_cast<VarDeclStmt*>(stmt->params[i]);
@@ -606,7 +607,7 @@ namespace mlang {
 			CopyObjInto(foundParam.value(), &tmpObj);
 		}
 		auto retCode = RunBlockStmt(dynamic_cast<BlockStmt *>(stmt->block));
-		engine->SetScope(stmt->funcScope->parent);
+		engine->SetScope(scope);
 
 		return retCode;
 	}

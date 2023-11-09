@@ -9,7 +9,8 @@ class Structure {
 
 int main(){	
 	const Structure obj;
-	const int variable = obj.Function(23);
+	int variable = obj.Function(123);
+	variable += 1;
 
 	return 0;
 }

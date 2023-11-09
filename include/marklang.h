@@ -115,10 +115,15 @@ namespace mlang {
 			MINUS,						// -
 			STAR,						// *
 			SLASH,						// /
+			ASSIGN_PLUS,				// +=
+			ASSIGN_MINUS,				// -=
+			ASSIGN_MUL,					// *=
+			ASSIGN_DIV,					// /=
 			NOT,						// !
 
 			LESS,						// <
 			GREATER,					// >
+			EQ,							// ==
 			LEQ,						// <=
 			GEQ,						// >=
 			NEQ,						// !=
