@@ -43,6 +43,12 @@ namespace mlang {
 
 		{"return", Token::Type::RETURN}
 	};
+	static const std::unordered_map<Token::Type, Token::Type> assignToOP = {{
+		{ Token::Type::ASSIGN_PLUS, Token::Type::PLUS },
+		{ Token::Type::ASSIGN_MINUS, Token::Type::MINUS },
+		{ Token::Type::ASSIGN_MUL, Token::Type::STAR },
+		{ Token::Type::ASSIGN_DIV, Token::Type::SLASH },
+	}};
 	Token Module::Tokenizer::Tokenize() {
 		if (currIdx >= code.size()) return Token(Token::Type::END, "", currRow, currCol);
 
@@ -878,22 +884,7 @@ namespace mlang {
 		}
 
 		if (assignType->type != Token::Type::ASSIGN && assignType->type != Token::Type::DOT) {
-			Token tok;
-			switch (assignType->type) {
-				case Token::Type::ASSIGN_PLUS:
-					tok = Token(Token::Type::PLUS);
-					break;
-				case Token::Type::ASSIGN_MINUS:
-					tok = Token(Token::Type::MINUS);
-					break;
-				case Token::Type::ASSIGN_MUL:
-					tok = Token(Token::Type::STAR);
-					break;
-				case Token::Type::ASSIGN_DIV:
-					tok = Token(Token::Type::SLASH);
-					break;
-			}
-			expr = new BinaryExpr(new ValueExpr(*identTok), tok, expr);
+			expr = new BinaryExpr(new ValueExpr(*identTok), Token(assignToOP.at(assignType->type)), expr);
 		}
 
 		return new VarAssignStmt(*identTok, expr);
