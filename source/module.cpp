@@ -528,7 +528,7 @@ namespace mlang {
 			ScriptFunc *funcFind = std::get<ScriptFunc*>(resolution.value());
 
 			if (!funcFind) return 0;
-			if (funcFind->GetUnderlyingFunc()->type.val == "void") return 0;
+			if (funcFind->returnType->GetName() == "void") return 0;
 
 			auto r = RunFunc(funcFind->GetUnderlyingFunc(), casted->params); assert(r == RespCode::SUCCESS);
 			auto retObj = funcFind->func->funcScope->returnObj;
@@ -594,6 +594,22 @@ namespace mlang {
 	}
 	RespCode Module::RunFunc(FuncStmt *stmt, std::vector<Expression *> params) {
 		auto scope = engine->GetScope();
+		if (stmt->funcScope->parentFunc->object) {
+			if (!stmt->funcScope->parentFunc->isConstMethod && stmt->funcScope->parentFunc->object->IsModifier(ScriptObject::Modifier::CONST)) {
+				std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " "
+					<< "Calling non const function '" << stmt->ident.val << "' of const object '" << stmt->funcScope->parentFunc->object->GetName()
+					<< "' at line " << stmt->ident.row << "[" << stmt->ident.col << "]\n";
+				return RespCode::ERR;
+			}
+		}
+		if (scope->parentFunc && stmt->funcScope->parentFunc) {
+			if (scope->parentFunc->object != stmt->funcScope->parentFunc->object && stmt->funcScope->parentFunc->methodVisibility != TypeInfo::Visibility::PUBLIC) {
+				std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " "
+					<< "Inacessible method '" << stmt->ident.val << "' at line " << stmt->ident.row << "[" << stmt->ident.col << "]\n";
+				return RespCode::ERR;
+			}
+		}
+
 		engine->SetScope(stmt->funcScope);
 		for (size_t i = 0; i < stmt->params.size(); ++i) {
 			auto funcParam = dynamic_cast<VarDeclStmt*>(stmt->params[i]);
@@ -620,6 +636,11 @@ namespace mlang {
 			return RespCode::ERR;
 		}
 		ScriptFunc *foundFunc = std::get<ScriptFunc *>(nameResolved.value());
+
+		if (!scope->parentFunc->isMethod && scope->parentFunc->methodVisibility != TypeInfo::Visibility::PUBLIC) {
+			std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " " << "Inacessible function '" << stmt->funcName.val << "'\n";
+			return RespCode::ERR;
+		}
 
 		return RunFunc(foundFunc->func, stmt->params);
 	}
@@ -740,18 +761,11 @@ namespace mlang {
 			}
 		}
 
-		/*if (source) {
-			if (std::holds_alternative<ScriptObject *>(source.value())) {
-				std::cout << stmt->ident.val << " set to " << dynamic_cast<ValueExpr *>(stmt->expr)->val.val << "\n";
-				return CopyObjInto(foundObj, std::get<ScriptObject *>(source.value()));
-			}
-			else if (std::holds_alternative<ScriptFunc *>(source.value())) {
-				std::cout << stmt->ident.val << " set to " << dynamic_cast<FuncCallExpr *>(stmt->expr)->funcName.val << "\n";
-
-				return CopyObjInto(foundObj, std::get<ScriptFunc *>(source.value())->GetUnderlyingFunc()->funcScope->returnObj);
-			}
+		if ((!scope->parentFunc || !scope->parentFunc->isMethod) && foundObj->GetType()->visibility != TypeInfo::Visibility::PUBLIC) {
+			std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " " <<
+				"Inacessible member '" << foundObj->GetName() << "' at line " << stmt->ident.row << "[" << stmt->ident.col << "]\n";
 			return RespCode::ERR;
-		}*/
+		}
 
 		ScriptObject tmpObj(engine, scope->FindTypeInfoByName("double").data.value());
 		double toSet = EvaluateExpr(scope, stmt->expr);

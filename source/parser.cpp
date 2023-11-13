@@ -1,5 +1,6 @@
 #include <marklang.h>
 #include <iostream>
+#include <unordered_set>
 
 #ifndef __FUNCTION_NAME__
 #if defined(WIN32) || defined(_WIN32)
@@ -35,6 +36,10 @@ namespace mlang {
 		{"enum", Token::Type::ENUM},
 		{"class", Token::Type::CLASS},
 
+		{"public", Token::Type::PUBLIC},
+		{"protected", Token::Type::PROTECTED},
+		{"private", Token::Type::PRIVATE},
+
 		{"if", Token::Type::IF},
 		{"else", Token::Type::ELSE},
 		{"while", Token::Type::WHILE},
@@ -49,6 +54,7 @@ namespace mlang {
 		{ Token::Type::ASSIGN_MUL, Token::Type::STAR },
 		{ Token::Type::ASSIGN_DIV, Token::Type::SLASH },
 	}};
+
 	Token Module::Tokenizer::Tokenize() {
 		if (currIdx >= code.size()) return Token(Token::Type::END, "", currRow, currCol);
 
@@ -149,6 +155,9 @@ namespace mlang {
 			}
 			case '.': {
 				return Token(Token::Type::DOT, std::string{ code[currIdx++] }, currRow, currCol++);
+			}
+			case ':': {
+				return  Token(Token::Type::DOUBLECOLON, std::string{ code[currIdx++] }, currRow, currCol++);
 			}
 			case '=': {
 				if (lookahead == '=') {
@@ -351,11 +360,45 @@ namespace mlang {
 		scope->RegisterType(type);
 
 		inMethod = true;
+		TypeInfo::Visibility currentVisibility = TypeInfo::Visibility::PRIVATE;
 		while (true) {
 			if (GetToken()->type == Token::Type::CLOSED_BRACE) break;
 
 			auto beginIdx = currTokIdx;
-			auto memberType = scope->FindTypeInfoByName((tok = NextToken())->val).data;
+
+			tok = NextToken();
+
+			switch (tok->type) {
+				case Token::Type::PUBLIC:
+					currentVisibility = TypeInfo::Visibility::PUBLIC;
+					if ((tok = NextToken())->type != Token::Type::DOUBLECOLON) {
+						std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " " << "Expected ':' at line " << tok->row << "[" << tok->col << "]\n";
+					}
+					beginIdx = currTokIdx;
+					tok = NextToken();
+					break;
+				case Token::Type::PROTECTED:
+					currentVisibility = TypeInfo::Visibility::PROTECTED;
+					if ((tok = NextToken())->type != Token::Type::DOUBLECOLON) {
+						std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " " << "Expected ':' at line " << tok->row << "[" << tok->col << "]\n";
+					}
+					beginIdx = currTokIdx;
+					tok = NextToken();
+					break;
+				case Token::Type::PRIVATE:
+					currentVisibility = TypeInfo::Visibility::PRIVATE;
+					if ((tok = NextToken())->type != Token::Type::DOUBLECOLON) {
+						std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " " << "Expected ':' at line " << tok->row << "[" << tok->col << "]\n";
+					}
+					beginIdx = currTokIdx;
+					tok = NextToken();
+					break;
+			}
+
+			if (tok->type == Token::Type::CONST) {
+				tok = NextToken();
+			}
+			auto memberType = scope->FindTypeInfoByName(tok->val).data;
 			if (!memberType || !memberType.has_value() || !memberType.value()) {
 				std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " Invalid type '" << tok->val << "' at line " << tok->row << "[" << tok->col << "]\n";
 				delete type;
@@ -375,13 +418,10 @@ namespace mlang {
 					std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " Method error\n";
 					return RespCode::ERR;
 				}
-				//auto newMethod = new ScriptFunc(
-				//	name->val,
-				//	dynamic_cast<FuncStmt *>(funcStmt)->params.size(), dynamic_cast<FuncStmt *>(funcStmt),
-				//	memberType.value(), true
-				//);
-				//newMethod->func->funcScope->SetScopeType(Scope::Type::CLASS);
+				dynamic_cast<FuncStmt *>(funcStmt)->funcScope->parentFunc->methodVisibility = currentVisibility;
+				dynamic_cast<FuncStmt *>(funcStmt)->funcScope->parentFunc->isMethod = true;
 				type->AddMethod(name->val, dynamic_cast<FuncStmt *>(funcStmt)->funcScope->parentFunc);
+
 				continue;
 			}
 			else if (tok->type != Token::Type::SEMICOLON) {
@@ -400,6 +440,8 @@ namespace mlang {
 			for (auto &[name, obj] : memberType.value()->members) {
 				newType->members[name] = new TypeInfo(*obj);
 			}
+			newType->visibility = currentVisibility;
+
 			type->AddMember(name->val, newType);
 		}
 		inMethod = false;
@@ -757,10 +799,10 @@ namespace mlang {
 	}
 	Statement *Module::ParseVarDecl() {
 		auto typeTok = GetToken();
-		if (!(typeTok->type >= Token::Type::TYPES_BEGIN && typeTok->type <= Token::Type::TYPES_END) &&
-			typeTok->type != Token::Type::UNSIGNED && typeTok->type != Token::Type::CONST &&
-			typeTok->type != Token::Type::IDENTIFIER) {
-			std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " " << "Invalid type specified at line " << typeTok->row << "[" << typeTok->col << "]\n";
+		
+		if (!(typeTok->type >= Token::Type::TYPES_BEGIN && typeTok->type <= Token::Type::TYPES_END) && typeTok->type != Token::Type::IDENTIFIER &&
+			typeTok->type != Token::Type::UNSIGNED && typeTok->type != Token::Type::CONST) {
+			std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " " << "Invalid value '" << typeTok->val << "' specified at line " << typeTok->row << "[" << typeTok->col << "]\n";
 			errCode = RespCode::ERR;
 			return nullptr;
 		}
@@ -784,6 +826,7 @@ namespace mlang {
 					case Token::Type::CONST:
 						mods |= static_cast<int>(ScriptObject::Modifier::CONST);
 						break;
+
 					default:
 						errCode = RespCode::ERR;
 						std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " " <<

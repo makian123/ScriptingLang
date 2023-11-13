@@ -87,6 +87,10 @@ namespace mlang {
 			CLASS,						// class
 			TYPES_END = CLASS,
 
+			PUBLIC,						// public
+			PROTECTED,					// protected
+			PRIVATE,					// private
+
 			UNSIGNED,					// unsigned
 
 			CONST,						// const
@@ -94,6 +98,7 @@ namespace mlang {
 			SEMICOLON,					// ;
 			COMMA,						// ,
 			DOT,						// .
+			DOUBLECOLON,				// :
 
 			IF,							// if
 			ELSE,						// else
@@ -305,6 +310,12 @@ namespace mlang {
 	};
 
 	class TypeInfo final {
+		public:
+		enum class Visibility : int {
+			PUBLIC,
+			PROTECTED,
+			PRIVATE
+		};
 		private:
 		// General info
 		size_t typeID;
@@ -322,6 +333,7 @@ namespace mlang {
 		std::vector<TypeInfo *> baseClasses;
 		std::unordered_map<std::string, TypeInfo *> members;
 		std::unordered_map<std::string, ScriptFunc *> methods;
+		Visibility visibility = Visibility::PUBLIC;
 
 		public:
 		friend class Engine;
@@ -413,6 +425,7 @@ namespace mlang {
 
 		TypeInfo *returnType;
 		bool isMethod, isConstMethod;
+		TypeInfo::Visibility methodVisibility = TypeInfo::Visibility::PUBLIC;
 
 		public:
 		friend class Engine;

@@ -2,15 +2,23 @@ class Structure {
 	int var;
 	int var2;
 
+	public:
 	int Function(const int input) const {
 		return input;
+	}
+
+	private:
+	void Func() {
+		var = 41;
 	}
 };
 
 int main(){	
-	const Structure obj;
+	Structure obj;
 	int variable = obj.Function(123);
 	variable += 1;
+
+	obj.Func();
 
 	return 0;
 }
