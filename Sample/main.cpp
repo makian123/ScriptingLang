@@ -6,6 +6,16 @@
 int main() {
 	mlang::Engine engine;
 
+	/*auto rvalue = mlang::ScriptRval::CreateFromLiteral(&engine, "12");
+	auto obj = new mlang::ScriptObject(&engine, engine.GetTypeInfoByName("int"));
+	obj->SetVal(rvalue);
+
+	std::cout << *reinterpret_cast<int *>(obj->GetAddressOfObj());
+
+	delete obj;
+
+	return 0;*/
+
 	// Creates a new module
 	auto r = engine.NewModule("testModule"); assert(r == mlang::RespCode::SUCCESS);
 

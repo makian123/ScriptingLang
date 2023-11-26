@@ -11,6 +11,10 @@
 #include <optional>
 #include <variant>
 #include <string_view>
+#include <type_traits>
+#include <concepts>
+#include <cassert>
+#include <iostream>
 
 namespace mlang {
 	class Module;
@@ -51,9 +55,12 @@ namespace mlang {
 		Scope *GetScope() const;
 		void SetScope(Scope *scope);
 
-		RespCode RegisterGlobalType(const std::string &name, size_t size = 0, TypeInfo *classInfo = nullptr, size_t offset = 0);
+		RespCode RegisterGlobalType(const std::string &name, size_t size = 0, TypeInfo *classInfo = nullptr, size_t offset = 0, bool isClass = false);
 		Response<size_t> GetTypeIdxByName(const std::string &name) const;
-		Response<TypeInfo *> GetTypeInfoByIdx(size_t idx) const;
+		TypeInfo *GetTypeInfoByIdx(size_t idx) const;
+		TypeInfo *GetTypeInfoByName(const std::string &name) const;
+
+		RespCode RegisterFunction(const std::string &name, const std::string &params, TypeInfo *returnType, const std::function<ScriptRval()> &func);
 
 		size_t GenerateTID() { return typeIndex++; }
 	};
@@ -71,6 +78,7 @@ namespace mlang {
 			TYPES_BEGIN,
 			VOID = TYPES_BEGIN,			// void
 
+			BOOL,						// bool
 			INT8,						// char
 			INT16,						// short
 			INT32,						// int
@@ -331,8 +339,8 @@ namespace mlang {
 		// Class info
 		bool isClass;
 		std::vector<TypeInfo *> baseClasses;
-		std::unordered_map<std::string, TypeInfo *> members;
-		std::unordered_map<std::string, ScriptFunc *> methods;
+		std::unordered_map<std::string, TypeInfo *> members = {};
+		std::unordered_map<std::string, ScriptFunc *> methods = {};
 		Visibility visibility = Visibility::PUBLIC;
 
 		public:
@@ -395,8 +403,10 @@ namespace mlang {
 		friend class Module;
 		friend class Scope;
 		friend class TypeInfo;
+		friend class ScriptRval;
 
 		ScriptObject(Engine *engine, TypeInfo *type, Modifier mods = (Modifier)0, bool shouldAlloc = true, ScriptObject *parentClass = nullptr);
+		ScriptObject(Engine *engine, TypeInfo *type, ScriptRval &rvalue, Modifier mods = (Modifier)0, bool alloc = true, ScriptObject *parentClass = nullptr);
 		~ScriptObject();
 
 		TypeInfo const *GetType() const { return type; }
@@ -411,9 +421,14 @@ namespace mlang {
 		void SetAddress(void *ptr);
 		void *GetAddressOfObj() const { return ptr; }
 
+		RespCode SetVal(ScriptRval &value);
+		RespCode SetVal(const ScriptObject *value);
+
 		Engine *GetEngine() const { return engine; }
 
 		RespCode CallMethod(const std::string &name);
+
+		static ScriptObject *Clone(ScriptObject *original);
 	};
 	class ScriptFunc final {
 		private:
@@ -442,14 +457,89 @@ namespace mlang {
 		size_t GetParamCount() const { return paramCount; }
 		FuncStmt *GetUnderlyingFunc() const { return func; }
 	};
+	
+	template<typename T>
+	concept Rvalueable = requires(T a) {
+		std::is_fundamental_v<T>;
+		std::is_same_v<T, ScriptObject>;
+		std::is_same_v<T, ScriptRval>;
+		std::is_pointer_v<T>;
+	};
 	class ScriptRval final {
-		TypeInfo *valueType;
-		void *data;
+		Engine *engine = nullptr;
+		const TypeInfo *valueType = nullptr;
+		void *data = nullptr;
+		bool reference;
 
+		ScriptRval(Engine *engine_ = nullptr, bool isReference_ = false) : engine(engine_), reference(isReference_) {}
 		public:
 		friend class Engine;
 		friend class Module;
 		friend class Scope;
+		friend class ScriptObject;
+
+		~ScriptRval() {
+			if (!reference)
+				delete data;
+		}
+
+		template<Rvalueable T>
+		static ScriptRval Create(Engine *engine, const TypeInfo *type, const T &data, bool isReference = false) {
+			ScriptRval ret(engine, isReference);
+			ret.valueType = type;
+
+			if(!isReference)
+				ret.data = new char[type->Size()];
+			else {
+				if constexpr (!std::is_pointer_v<T>) throw std::exception("Error creating rvalue");
+				else {
+					ret.data = reinterpret_cast<void *>(data);
+					return ret;
+				}
+			}
+
+			if constexpr (std::is_fundamental_v<T>) {
+				assert(!isReference);
+				ret.valueType = type;
+				std::memcpy(ret.data, &data, type->Size());
+				return ret;
+			}
+			else if constexpr (std::is_same_v<T, ScriptObject> || std::is_pointer_v<T>) {
+				if (isReference) {
+					ret.data = data;
+				}
+			}
+			else if constexpr (std::is_same_v<T, ScriptRval>) {
+				if constexpr (std::is_pointer_v<T>)
+					ret.data = data;
+				else 
+					std::memcpy(ret.data, data.data, type->Size());
+			}
+
+			return ret;
+		}
+
+		// Only works on primitives
+		static ScriptRval CreateFromLiteral(Engine *engine, const std::string &data);
+
+		ScriptRval operator+(const ScriptRval &other) const;
+		ScriptRval operator-(const ScriptRval &other) const;
+		ScriptRval operator*(const ScriptRval &other) const;
+		ScriptRval operator/(const ScriptRval &other) const;
+		ScriptRval operator<(const ScriptRval &other) const;
+		ScriptRval operator>(const ScriptRval &other) const;
+		ScriptRval operator<=(const ScriptRval &other) const;
+		ScriptRval operator>=(const ScriptRval &other) const;
+		ScriptRval operator!=(const ScriptRval &other) const;
+		ScriptRval operator==(const ScriptRval &other) const;
+		ScriptRval &operator+=(const ScriptRval &other);
+		ScriptRval &operator-=(const ScriptRval &other);
+		ScriptRval &operator*=(const ScriptRval &other);
+		ScriptRval &operator/=(const ScriptRval &other);
+
+		operator bool() const;
+
+		RespCode SetValue(const ScriptRval &other);
 	};
 	
 	class Module final {
@@ -508,7 +598,7 @@ namespace mlang {
 		RespCode RunVarAssignStmt(VarAssignStmt *stmt);
 		RespCode RunStmt(Statement *stmt);
 
-		double EvaluateExpr(Scope *scope, Expression *expr);
+		ScriptRval EvaluateExpr(Scope *scope, Expression *expr);
 		public:
 		Module(Engine *engine, const std::string &name = "");
 
@@ -543,7 +633,7 @@ namespace mlang {
 		std::vector<ScriptFunc *> funcs;
 		Engine *engine;
 		Scope *parent;
-		ScriptObject *returnObj = nullptr;
+		ScriptRval returnObj;
 
 		public:
 		friend class Module;

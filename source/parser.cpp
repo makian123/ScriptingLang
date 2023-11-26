@@ -22,6 +22,7 @@ namespace mlang {
 	static const std::unordered_map<std::string, Token::Type> keywords = {
 		{"void", Token::Type::VOID},
 
+		{"bool", Token::Type::BOOL},
 		{"char", Token::Type::INT8},
 		{"short", Token::Type::INT16},
 		{"int", Token::Type::INT32},

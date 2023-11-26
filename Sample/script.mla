@@ -7,7 +7,7 @@ class Structure {
 		return input;
 	}
 
-	private:
+	public:
 	void Func() {
 		var = 41;
 	}
@@ -15,8 +15,6 @@ class Structure {
 
 int main(){	
 	Structure obj;
-	int variable = obj.Function(123);
-	variable += 1;
 
 	obj.Func();
 

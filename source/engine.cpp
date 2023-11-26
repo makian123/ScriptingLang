@@ -9,6 +9,7 @@ namespace mlang {
 		// Deals with primitives
 		globalScope->RegisterType(new TypeInfo(this, GenerateTID(), "void", 0));
 
+		globalScope->RegisterType(new TypeInfo(this, GenerateTID(), "bool", 1));
 		globalScope->RegisterType(new TypeInfo(this, GenerateTID(), "char", 1));
 		globalScope->RegisterType(new TypeInfo(this, GenerateTID(), "short", 2));
 		globalScope->RegisterType(new TypeInfo(this, GenerateTID(), "int", 4));
@@ -62,12 +63,12 @@ namespace mlang {
 		currScope = scope;
 	}
 
-	RespCode Engine::RegisterGlobalType(const std::string &name, size_t size, TypeInfo *classInfo, size_t offset) {
+	RespCode Engine::RegisterGlobalType(const std::string &name, size_t size, TypeInfo *classInfo, size_t offset, bool isClass) {
 		if (globalScope->FindTypeInfoByName(name).code == RespCode::SUCCESS) {
 			return RespCode::ERR;
 		}
 
-		globalScope->RegisterType(new TypeInfo(this, GenerateTID(), name, size, false, offset, classInfo));
+		globalScope->RegisterType(new TypeInfo(this, GenerateTID(), name, size, false, offset, classInfo, isClass));
 		return RespCode::SUCCESS;
 	}
 	Response<size_t> Engine::GetTypeIdxByName(const std::string &name) const {
@@ -77,7 +78,10 @@ namespace mlang {
 		}
 		return Response<size_t>(data.value()->TypeID(), RespCode::SUCCESS);
 	}
-	Response<TypeInfo *> Engine::GetTypeInfoByIdx(size_t idx) const {
-		return globalScope->FindTypeInfoByID(idx);
+	TypeInfo *Engine::GetTypeInfoByIdx(size_t idx) const {
+		return globalScope->FindTypeInfoByID(idx).data.value();
+	}
+	TypeInfo *Engine::GetTypeInfoByName(const std::string &name) const {
+		return globalScope->FindTypeInfoByName(name).data.value();
 	}
 }

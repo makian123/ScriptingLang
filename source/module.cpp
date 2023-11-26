@@ -429,27 +429,27 @@ namespace mlang {
 		}
 	}
 
-	double Module::EvaluateExpr(Scope *scope, Expression *expr) {
+	ScriptRval Module::EvaluateExpr(Scope *scope, Expression *expr) {
 		if (expr->type == Expression::Type::VALUE) {
 			auto casted = dynamic_cast<ValueExpr *>(expr);
 
-			if(casted->val.type >= Token::Type::LITERALS_BEGIN && casted->val.type <= Token::Type::LITERALS_END)
-				return std::stod(casted->val.val);
+			if (casted->val.type >= Token::Type::LITERALS_BEGIN && casted->val.type <= Token::Type::LITERALS_END)
+				return ScriptRval::CreateFromLiteral(engine, casted->val.val);
 			if (casted->val.type != Token::Type::IDENTIFIER) {
 				std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " Invalid token " << casted->val.val << "\n";
 				errCode = RespCode::ERR;
-				return 0;
+				return ScriptRval::CreateFromLiteral(engine, "0");
 			}
 
 			auto resolution = NameResolution(casted->val.val);
 			if (!resolution) {
 				std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " Invalid object " << casted->val.val << "\n";
 				errCode = RespCode::ERR;
-				return 0;
+				return ScriptRval::CreateFromLiteral(engine, "0");
 			}
 			ScriptObject *objFound = std::get<ScriptObject *>(resolution.value());
 
-			if (objFound->GetType()->IsClass()) return 0;
+			if (objFound->GetType()->IsClass()) return ScriptRval::CreateFromLiteral(engine, "0");
 
 			auto objType = objFound->GetType();
 			void *ptr = objFound->GetAddressOfObj();
@@ -457,32 +457,40 @@ namespace mlang {
 			if (objType->GetName() != "float" && objType->GetName() != "double") {
 					switch (objType->Size()) {
 						case 1:
-							return static_cast<double>(objType->IsUnsigned() ? *reinterpret_cast<uint8_t *>(ptr) : *reinterpret_cast<int8_t *>(ptr));
+							return (objType->IsUnsigned() ? 
+								ScriptRval::Create(engine, objType, *reinterpret_cast<uint8_t *>(ptr)) : 
+								ScriptRval::Create(engine, objType, *reinterpret_cast<int8_t *>(ptr)));
 						case 2:
-							return static_cast<double>(objType->IsUnsigned() ? *reinterpret_cast<uint16_t *>(ptr) : *reinterpret_cast<uint16_t *>(ptr));
+							return (objType->IsUnsigned() ?
+								ScriptRval::Create(engine, objType, *reinterpret_cast<uint16_t *>(ptr)) :
+								ScriptRval::Create(engine, objType, *reinterpret_cast<int16_t *>(ptr)));
 						case 4:
-							return static_cast<double>(objType->IsUnsigned() ? *reinterpret_cast<uint32_t *>(ptr) : *reinterpret_cast<uint32_t *>(ptr));
+							return (objType->IsUnsigned() ?
+								ScriptRval::Create(engine, objType, *reinterpret_cast<uint32_t *>(ptr)) :
+								ScriptRval::Create(engine, objType, *reinterpret_cast<int32_t *>(ptr)));
 						case 8:
-							return static_cast<double>(objType->IsUnsigned() ? *reinterpret_cast<uint64_t *>(ptr) : *reinterpret_cast<uint64_t *>(ptr));
+							return (objType->IsUnsigned() ?
+								ScriptRval::Create(engine, objType, *reinterpret_cast<uint64_t *>(ptr)) :
+								ScriptRval::Create(engine, objType, *reinterpret_cast<int64_t *>(ptr)));
 						default:
-							return 0;
+							return ScriptRval::CreateFromLiteral(engine, "0");
 					}
 				}
 			else {
 				if (objType->GetName() == "float") {
-					return *reinterpret_cast<float *>(ptr);
+					return ScriptRval::Create(engine, objType, *reinterpret_cast<float *>(ptr));
 				}
 				else {
-					return *reinterpret_cast<double *>(ptr);
+					return ScriptRval::Create(engine, objType, *reinterpret_cast<double *>(ptr));
 				}
 			}
 
 			errCode = RespCode::ERR;
-			return 0;
+			return ScriptRval::CreateFromLiteral(engine, "0");
 		}
 		else if (expr->type == Expression::Type::BINARY) {
 			auto casted = dynamic_cast<BinaryExpr *>(expr);
-			double val = EvaluateExpr(scope, casted->lhs);
+			auto val = EvaluateExpr(scope, casted->lhs);
 
 			switch (casted->op.type) {
 				case Token::Type::PLUS:
@@ -523,29 +531,20 @@ namespace mlang {
 			if (!resolution || !std::holds_alternative<ScriptFunc *>(resolution.value())) {
 				std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " Invalid function " << casted->funcName.val << "\n";
 				errCode = RespCode::ERR;
-				return 0;
+				return ScriptRval::CreateFromLiteral(engine, "0");
 			}
 			ScriptFunc *funcFind = std::get<ScriptFunc*>(resolution.value());
 
-			if (!funcFind) return 0;
-			if (funcFind->returnType->GetName() == "void") return 0;
+			if (!funcFind) return ScriptRval::CreateFromLiteral(engine, "0");
+			if (funcFind->returnType->GetName() == "void") return ScriptRval::CreateFromLiteral(engine, "0");
 
 			auto r = RunFunc(funcFind->GetUnderlyingFunc(), casted->params); assert(r == RespCode::SUCCESS);
-			auto retObj = funcFind->func->funcScope->returnObj;
-			ScriptObject retExpr(engine, engine->GetScope()->FindTypeInfoByName("double").data.value());
-			auto tmp = &retExpr;
-			CopyObjInto(tmp, retObj);
 
-			delete funcFind->func->funcScope->returnObj;
-			funcFind->func->funcScope->returnObj = nullptr;
-
-			double ret = *reinterpret_cast<double *>(retExpr.ptr);
-
-			return ret;
+			return funcFind->func->funcScope->returnObj;
 		}
 
 		errCode = RespCode::ERR;
-		return 0;
+		return ScriptRval::CreateFromLiteral(engine, "0");
 	}
 
 	RespCode Module::Build() {
@@ -579,7 +578,7 @@ namespace mlang {
 	}
 
 	RespCode Module::RunWhile(WhileStmt *stmt) {
-		while (EvaluateExpr(engine->GetScope(), stmt->cond) != 0) {
+		while (EvaluateExpr(engine->GetScope(), stmt->cond)) {
 			auto scope = stmt->scope;
 			engine->SetScope(scope);
 
@@ -622,6 +621,7 @@ namespace mlang {
 			*reinterpret_cast<double *>(tmpObj.ptr) = providedValue;
 			CopyObjInto(foundParam.value(), &tmpObj);
 		}
+
 		auto retCode = RunBlockStmt(dynamic_cast<BlockStmt *>(stmt->block));
 		engine->SetScope(scope);
 
@@ -647,18 +647,15 @@ namespace mlang {
 	RespCode Module::RunReturn(ReturnStmt *stmt) {
 		auto scope = engine->GetScope();
 		if (!scope->IsOfType(Scope::Type::FUNCTION)) {
-			// TODO: change to RespCode::ERR
-			return RespCode::SUCCESS;
+			return RespCode::ERR;
 		}
 		if (stmt->val && scope->parentFunc->returnType->GetName() == "void") {
 			return RespCode::ERR;
 		}
 
-		scope->returnObj = new ScriptObject(engine, scope->parentFunc->returnType);
-		ScriptObject tmp(engine, scope->FindTypeInfoByName("double").data.value());
-		*reinterpret_cast<double *>(tmp.ptr) = EvaluateExpr(scope, stmt->val);
+		scope->returnObj = EvaluateExpr(scope, stmt->val);
 
-		return CopyObjInto(scope->returnObj, &tmp);
+		return RespCode::SUCCESS;
 	}
 	RespCode Module::RunIf(IfStmt *stmt) {
 		double value = EvaluateExpr(engine->GetScope(), stmt->condition);
@@ -716,8 +713,6 @@ namespace mlang {
 		}
 
 		if (stmt->expr) {
-			ScriptObject tmpObj(engine, scope->FindTypeInfoByName("double").data.value());
-
 			if (dynamic_cast<ValueExpr *>(stmt->expr) && dynamic_cast<ValueExpr *>(stmt->expr)->val.type == Token::Type::IDENTIFIER) {
 				auto nameResolution = NameResolution(dynamic_cast<ValueExpr *>(stmt->expr)->val.val);
 
@@ -727,11 +722,9 @@ namespace mlang {
 				return CopyObjInto(foundObj.value(), foundSrc);
 			}
 
-			double toSet = EvaluateExpr(scope, stmt->expr);
-			std::cout << foundObj.value()->identifier << " initialized to " << toSet << "\n";
-			*reinterpret_cast<double *>(tmpObj.ptr) = toSet;
-
-			return CopyObjInto(foundObj.value(), &tmpObj);
+			auto expr = EvaluateExpr(scope, stmt->expr);
+			
+			return foundObj.value()->SetVal(expr);
 		}
 
 		return RespCode::SUCCESS;
@@ -767,12 +760,8 @@ namespace mlang {
 			return RespCode::ERR;
 		}
 
-		ScriptObject tmpObj(engine, scope->FindTypeInfoByName("double").data.value());
-		double toSet = EvaluateExpr(scope, stmt->expr);
-		std::cout << stmt->ident.val << " set to " << toSet << "\n";
-		*reinterpret_cast<double *>(tmpObj.ptr) = toSet;
-
-		return CopyObjInto(foundObj, &tmpObj);
+		auto expr = EvaluateExpr(scope, stmt->expr);
+		return foundObj->SetVal(expr);
 	}
 	RespCode Module::RunStmt(Statement *stmt) {
 		switch (stmt->type) {
@@ -810,7 +799,11 @@ namespace mlang {
 			FuncStmt *castedStmt = dynamic_cast<FuncStmt *>(stmt);
 			if (castedStmt->ident.val != "main") continue;
 
-			return RunFunc(castedStmt, std::vector<Expression*>());
+			auto toRet = RunFunc(castedStmt, std::vector<Expression*>());
+
+			castedStmt->funcScope->returnObj.data = nullptr;
+
+			return RespCode::SUCCESS;
 		}
 
 		return RespCode::ERR;

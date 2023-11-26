@@ -28,6 +28,7 @@
     <ClCompile Include="source\scope.cpp" />
     <ClCompile Include="source\scriptfunc.cpp" />
     <ClCompile Include="source\scriptobject.cpp" />
+    <ClCompile Include="source\scriptrval.cpp" />
     <ClCompile Include="source\types.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
@@ -145,7 +146,7 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <TreatWarningAsError>true</TreatWarningAsError>
+      <TreatWarningAsError>false</TreatWarningAsError>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
     </ClCompile>
     <Link>
