@@ -494,34 +494,27 @@ namespace mlang {
 
 			switch (casted->op.type) {
 				case Token::Type::PLUS:
-					val += EvaluateExpr(scope, casted->rhs);
-					break;
+					return val + EvaluateExpr(scope, casted->rhs);
 				case Token::Type::MINUS:
-					val -= EvaluateExpr(scope, casted->rhs);
-					break;
+					return val - EvaluateExpr(scope, casted->rhs);
 				case Token::Type::STAR:
-					val *= EvaluateExpr(scope, casted->rhs);
-					break;
+					return val * EvaluateExpr(scope, casted->rhs);
 				case Token::Type::SLASH:
-					val /= EvaluateExpr(scope, casted->rhs);
-					break;
+					return val / EvaluateExpr(scope, casted->rhs);
 				case Token::Type::LESS:
-					val = val < EvaluateExpr(scope, casted->rhs);
-					break;
+					return val < EvaluateExpr(scope, casted->rhs);
 				case Token::Type::LEQ:
-					val = val <= EvaluateExpr(scope, casted->rhs);
-					break;
+					return val <= EvaluateExpr(scope, casted->rhs);
 				case Token::Type::GREATER:
-					val = val > EvaluateExpr(scope, casted->rhs);
-					break;
+					return val > EvaluateExpr(scope, casted->rhs);
 				case Token::Type::GEQ:
-					val = val >= EvaluateExpr(scope, casted->rhs);
-					break;
+					return val >= EvaluateExpr(scope, casted->rhs);
 				case Token::Type::NEQ:
-					val = val != EvaluateExpr(scope, casted->rhs);
-					break;
+					return val != EvaluateExpr(scope, casted->rhs);
 			}
 
+			std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " Invalid operator" << casted->op.val << "\n";
+			errCode = RespCode::ERR;
 			return val;
 		}
 		else if (expr->type == Expression::Type::FUNCCALL) {
@@ -640,6 +633,10 @@ namespace mlang {
 		if (!scope->parentFunc->isMethod && scope->parentFunc->methodVisibility != TypeInfo::Visibility::PUBLIC) {
 			std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " " << "Inacessible function '" << stmt->funcName.val << "'\n";
 			return RespCode::ERR;
+		}
+
+		if (foundFunc->isMethod && scope->parentFunc->isMethod) {
+			foundFunc->object = scope->parentFunc->object;
 		}
 
 		return RunFunc(foundFunc->func, stmt->params);
@@ -761,7 +758,10 @@ namespace mlang {
 		}
 
 		auto expr = EvaluateExpr(scope, stmt->expr);
-		return foundObj->SetVal(expr);
+
+		auto retCode = foundObj->SetVal(expr);
+
+		return retCode;
 	}
 	RespCode Module::RunStmt(Statement *stmt) {
 		switch (stmt->type) {

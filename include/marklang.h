@@ -478,6 +478,10 @@ namespace mlang {
 		friend class Scope;
 		friend class ScriptObject;
 
+		ScriptRval(ScriptRval &&other) noexcept :engine(other.engine), valueType(other.valueType), data(other.data), reference(other.reference) {
+			other.data = nullptr;
+		}
+		ScriptRval(const ScriptRval &other);
 		~ScriptRval() {
 			if (!reference)
 				delete data;
@@ -536,6 +540,7 @@ namespace mlang {
 		ScriptRval &operator-=(const ScriptRval &other);
 		ScriptRval &operator*=(const ScriptRval &other);
 		ScriptRval &operator/=(const ScriptRval &other);
+		ScriptRval &operator=(const ScriptRval &other);
 
 		operator bool() const;
 

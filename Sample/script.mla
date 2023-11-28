@@ -2,14 +2,15 @@ class Structure {
 	int var;
 	int var2;
 
-	public:
-	int Function(const int input) const {
-		return input;
+	private:
+	void PrivateFunction(){
+		var = 124;
 	}
 
 	public:
 	void Func() {
 		var = 41;
+		PrivateFunction();
 	}
 };
 
