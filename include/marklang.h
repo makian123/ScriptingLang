@@ -338,7 +338,7 @@ namespace mlang {
 		
 		// Class info
 		bool isClass;
-		std::vector<TypeInfo *> baseClasses;
+		std::vector<TypeInfo *> baseClasses;	// Derivations
 		std::unordered_map<std::string, TypeInfo *> members = {};
 		std::unordered_map<std::string, ScriptFunc *> methods = {};
 		Visibility visibility = Visibility::PUBLIC;
@@ -349,6 +349,7 @@ namespace mlang {
 		friend class Scope;
 		friend class ScriptObject;
 
+		TypeInfo(const TypeInfo *other);
 		TypeInfo(Engine *engine, size_t tID, const std::string &name, size_t sz, bool unsign = false, size_t off = 0, TypeInfo *parentClass_ = nullptr, bool isClass_ = false)
 			: engine(engine), typeID(tID), name(name), typeSz(sz), unsig(unsign), offset(off), parentClass(parentClass_), isClass(isClass_) {}
 		~TypeInfo();
