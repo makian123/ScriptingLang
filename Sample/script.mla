@@ -1,23 +1,35 @@
-class Structure {
+class A{
 	int var;
-	int var2;
-
-	private:
-	void PrivateFunction(){
-		var = 124;
-	}
 
 	public:
-	void Func() {
-		var = 41;
-		PrivateFunction();
+	void Function1(){
+		var = 12;
+	}
+};
+class B{
+	A var;
+	int var1;
+
+	public:
+	void Function2(){
+		var.Function1();
+		var1 = 13;
+	}
+};
+class C{
+	B var;
+	int var2;
+
+	public:
+	void Function3(){
+		var.Function2();
+		var2 = 14;
 	}
 };
 
 int main(){	
-	Structure obj;
-
-	obj.Func();
+	C obj;
+	obj.Function3();
 
 	return 0;
 }

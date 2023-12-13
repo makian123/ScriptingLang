@@ -1,11 +1,12 @@
 #include <marklang.h>
 
 namespace mlang {
-	TypeInfo::~TypeInfo() {
-		for (auto &member : members) {
-			delete member.second;
-		}
-	}
+	TypeInfo::TypeInfo(const TypeInfo *other)
+		:typeID(other->engine->GenerateTID()), name(other->name), typeSz(other->typeID),
+		unsig(other->unsig), engine(other->engine), offset(other->offset), parentClass(other->parentClass),
+		isClass(other->isClass), baseClasses(other->baseClasses),
+		methods(other->methods), members(other->members), visibility(other->visibility) {}
+	TypeInfo::~TypeInfo() {}
 
 	bool TypeInfo::IsBaseOf(const TypeInfo *base) const {
 		if (std::find(baseClasses.begin(), baseClasses.end(), base) != baseClasses.end()) {

@@ -56,12 +56,16 @@ namespace mlang {
 
 	std::optional<std::variant<ScriptFunc *, ScriptObject *>> Module::NameResolution(const std::string &name) {
 		auto scope = engine->GetScope();
-		if (name.find(':') == std::string::npos && name.find('.') == std::string::npos) {
+		if (name.find_first_of(".:") == std::string::npos) {
 			if (scope->FindObjectByName(name).data.value()) {
 				return scope->FindObjectByName(name).data.value();
 			}
 			else if (scope->FindFuncByName(name).data.value()) {
-				return scope->FindFuncByName(name).data.value();
+				auto func = scope->FindFuncByName(name).data;
+				if (func && func.value()->isMethod) {
+					func.value()->object = scope->parentFunc->object;
+				}
+				return func;
 			}
 
 			// Class name resolution
@@ -70,7 +74,10 @@ namespace mlang {
 					return scope->parentFunc->GetScriptObject()->GetMember(name);
 				}
 				else if (scope->parentFunc->GetScriptObject() && scope->parentFunc->GetScriptObject()->GetType()->GetMethod(name)) {
-					return scope->parentFunc->GetUnderlyingFunc()->funcScope->FindObjectByName(name).data;
+					auto method = scope->parentFunc->GetScriptObject()->GetType()->GetMethod(name);
+					if (method)
+						method.value()->object = scope->parentFunc->GetScriptObject();
+					return method;
 				}
 				
 			}
@@ -120,6 +127,9 @@ namespace mlang {
 					}
 					else if (scope->FindObjectByName(word).data.value()) {
 						tmp = scope->FindObjectByName(word).data.value();
+					}
+					else if (scope->IsOfType(Scope::Type::CLASS) && scope->parentFunc->object->GetMember(word)) {
+						tmp = scope->parentFunc->object->GetMember(word).value();
 					}
 					else {
 						return std::nullopt;
@@ -595,7 +605,9 @@ namespace mlang {
 			}
 		}
 		if (scope->parentFunc && stmt->funcScope->parentFunc) {
-			if (scope->parentFunc->object != stmt->funcScope->parentFunc->object && stmt->funcScope->parentFunc->methodVisibility != TypeInfo::Visibility::PUBLIC) {
+			if (
+				scope->parentFunc->object != stmt->funcScope->parentFunc->object && 
+				stmt->funcScope->parentFunc->methodVisibility != TypeInfo::Visibility::PUBLIC) {
 				std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " "
 					<< "Inacessible method '" << stmt->ident.val << "' at line " << stmt->ident.row << "[" << stmt->ident.col << "]\n";
 				return RespCode::ERR;
@@ -635,9 +647,9 @@ namespace mlang {
 			return RespCode::ERR;
 		}
 
-		if (foundFunc->isMethod && scope->parentFunc->isMethod) {
-			foundFunc->object = scope->parentFunc->object;
-		}
+		//if (foundFunc->isMethod && scope->parentFunc->isMethod) {
+		//	foundFunc->object = scope->parentFunc->object;
+		//}
 
 		return RunFunc(foundFunc->func, stmt->params);
 	}
@@ -760,6 +772,10 @@ namespace mlang {
 		auto expr = EvaluateExpr(scope, stmt->expr);
 
 		auto retCode = foundObj->SetVal(expr);
+
+		if (retCode == RespCode::SUCCESS) {
+			std::cout << stmt->ident.val << " set to " << *reinterpret_cast<int*>(foundObj->GetAddressOfObj()) << "\n";
+		}
 
 		return retCode;
 	}

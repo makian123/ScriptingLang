@@ -369,6 +369,7 @@ namespace mlang {
 
 			tok = NextToken();
 
+			// Deals with visibility
 			switch (tok->type) {
 				case Token::Type::PUBLIC:
 					currentVisibility = TypeInfo::Visibility::PUBLIC;
@@ -439,7 +440,10 @@ namespace mlang {
 				type, memberType.value()->isClass
 			);
 			for (auto &[name, obj] : memberType.value()->members) {
-				newType->members[name] = new TypeInfo(*obj);
+				newType->members[name] = obj;
+			}
+			for (auto &[name, method] : memberType.value()->methods) {
+				newType->methods[name] = method;
 			}
 			newType->visibility = currentVisibility;
 
@@ -466,7 +470,6 @@ namespace mlang {
 		}
 
 		Token nameTok = *NextToken();
-
 
 		while (GetToken()->type == Token::Type::IDENTIFIER || GetToken()->type == Token::Type::DOT) {
 			nameTok.val += NextToken()->val;
