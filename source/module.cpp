@@ -54,15 +54,17 @@ namespace mlang {
 	Module::Module(Engine *engine_, const std::string &name_)
 		:engine(engine_), name(name_), moduleStmts(std::make_unique<BlockStmt>()) {}
 
-	std::optional<std::variant<ScriptFunc *, ScriptObject *>> Module::NameResolution(const std::string &name) {
-		auto scope = engine->GetScope();
-		if (name.find_first_of(".:") == std::string::npos) {
+	std::optional<std::variant<ScriptFunc *, ScriptObject *>> Module::NameResolution(const std::string &name, Scope *scope) {
+		if(!scope)
+			scope = engine->GetScope();
+
+		if (name.find(':') == std::string::npos && name.find('.') == std::string::npos) {
 			if (scope->FindObjectByName(name).data.value()) {
 				return scope->FindObjectByName(name).data.value();
 			}
 			else if (scope->FindFuncByName(name).data.value()) {
-				auto func = scope->FindFuncByName(name).data;
-				if (func && func.value()->isMethod) {
+				auto func = scope->FindFuncByName(name).data.value();
+				if (func->isMethod) {
 					func.value()->object = scope->parentFunc->object;
 				}
 				return func;
@@ -543,7 +545,7 @@ namespace mlang {
 
 			auto r = RunFunc(funcFind->GetUnderlyingFunc(), casted->params); assert(r == RespCode::SUCCESS);
 
-			return funcFind->func->funcScope->returnObj;
+			return *funcFind->func->funcScope->returnObj.get();
 		}
 
 		errCode = RespCode::ERR;
@@ -622,9 +624,10 @@ namespace mlang {
 			auto foundParam = stmt->funcScope->FindObjectByName(funcParam->ident.val).data;
 			if (!foundParam) continue;
 
-			ScriptObject tmpObj(engine, engine->GetScope()->FindTypeInfoByName("double").data.value());
-			*reinterpret_cast<double *>(tmpObj.ptr) = providedValue;
-			CopyObjInto(foundParam.value(), &tmpObj);
+			foundParam.value()->SetVal(providedValue);
+			//ScriptObject tmpObj(engine, engine->GetScope()->FindTypeInfoByName("double").data.value());
+			//*reinterpret_cast<double *>(tmpObj.ptr) = providedValue;
+			//CopyObjInto(foundParam.value(), &tmpObj);
 		}
 
 		auto retCode = RunBlockStmt(dynamic_cast<BlockStmt *>(stmt->block));
@@ -635,16 +638,26 @@ namespace mlang {
 	RespCode Module::RunFuncCall(FuncCallStmt *stmt) {
 		auto scope = engine->GetScope();
 
-		auto nameResolved = NameResolution(stmt->funcName.val);
+		auto nameResolved = NameResolution(stmt->funcName.val, scope);
 		if (!nameResolved || !std::holds_alternative<ScriptFunc *>(nameResolved.value())) {
-			std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " " << "Invalid function '" << stmt->funcName.val << "'\n";
+			std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " " 
+				<< "Invalid function '" << stmt->funcName.val << "' at line " << stmt->funcName.row << "[" << stmt->funcName.col << "]\n";
 			return RespCode::ERR;
 		}
 		ScriptFunc *foundFunc = std::get<ScriptFunc *>(nameResolved.value());
 
 		if (!scope->parentFunc->isMethod && scope->parentFunc->methodVisibility != TypeInfo::Visibility::PUBLIC) {
-			std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " " << "Inacessible function '" << stmt->funcName.val << "'\n";
+			std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " " 
+				<< "Inacessible function '" << stmt->funcName.val << "' at line " << stmt->funcName.row << "[" << stmt->funcName.col << "]\n";;
 			return RespCode::ERR;
+		}
+		if (scope->parentFunc && scope->parentFunc->isConstMethod) {
+			if (!foundFunc->isConstMethod) {
+				std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " " 
+					<< "Call to non const function '" << stmt->funcName.val 
+					<< "' at line " << stmt->funcName.row << "[" << stmt->funcName.col << "]\n";
+				return RespCode::ERR;
+			}
 		}
 
 		//if (foundFunc->isMethod && scope->parentFunc->isMethod) {
@@ -662,7 +675,12 @@ namespace mlang {
 			return RespCode::ERR;
 		}
 
-		scope->returnObj = EvaluateExpr(scope, stmt->val);
+		if (!scope->returnObj) {
+			scope->returnObj = std::make_unique<ScriptRval>(EvaluateExpr(scope, stmt->val));
+		}
+		else {
+			*scope->returnObj.get() = EvaluateExpr(scope, stmt->val);
+		}
 
 		return RespCode::SUCCESS;
 	}
@@ -710,6 +728,7 @@ namespace mlang {
 			std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " "  << "Type '" << stmt->type.val << "' not found at line " << stmt->ident.row << "[" << stmt->ident.col << "]\n";
 			return RespCode::ERR;
 		}
+
 		auto obj = new ScriptObject(engine, typeFind.value());
 		obj->modifiers = static_cast<ScriptObject::Modifier>(stmt->modifiers);
 		obj->identifier = stmt->ident.val;
@@ -741,9 +760,9 @@ namespace mlang {
 	RespCode Module::RunVarAssignStmt(VarAssignStmt *stmt) {
 		auto scope = engine->GetScope();
 
-		std::optional<std::variant<ScriptFunc *, ScriptObject *>> source = std::nullopt;
+		std::optional<std::variant<ScriptFunc *, ScriptObject *>> nameResolution = std::nullopt;
 
-		auto nameResolution = NameResolution(stmt->ident.val);
+		nameResolution = NameResolution(stmt->ident.val);
 		if (!nameResolution || !std::holds_alternative<ScriptObject *>(nameResolution.value())) {
 			std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " " << "Invalid variable '" << stmt->ident.val << "' at line " << stmt->ident.row << "[" << stmt->ident.col << "]\n";
 			return RespCode::ERR;
@@ -817,7 +836,7 @@ namespace mlang {
 
 			auto toRet = RunFunc(castedStmt, std::vector<Expression*>());
 
-			castedStmt->funcScope->returnObj.data = nullptr;
+			castedStmt->funcScope->returnObj.release();
 
 			return RespCode::SUCCESS;
 		}

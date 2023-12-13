@@ -581,7 +581,7 @@ namespace mlang {
 		auto ret = new FuncStmt(params, block, *currTok, Token(Token::Type::IDENTIFIER, idenTok->val));
 		ret->funcScope = scope;
 
-		auto scriptFunc = new ScriptFunc(idenTok->val, params.size(), ret, retType.value(), inMethod, isConst);
+		auto scriptFunc = new ScriptFunc(idenTok->val, params.size(), ret, retType.value(), inMethod, nullptr, isConst);
 		scope->parentFunc = scriptFunc;
 
 		engine->SetScope(scope->parent);

@@ -2,8 +2,9 @@ class A{
 	int var;
 
 	public:
-	void Function1(){
-		var = 12;
+	int Function(const int input) {
+		var = input;
+		return input;
 	}
 };
 class B{
@@ -11,9 +12,9 @@ class B{
 	int var1;
 
 	public:
-	void Function2(){
-		var.Function1();
-		var1 = 13;
+	void Func() {
+		Function(12);
+
 	}
 };
 class C{
