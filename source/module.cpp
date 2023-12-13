@@ -64,7 +64,9 @@ namespace mlang {
 			}
 			else if (scope->FindFuncByName(name).data.value()) {
 				auto func = scope->FindFuncByName(name).data.value();
-				if(scope->parentFunc) func->object = scope->parentFunc->object;
+				if (func->isMethod) {
+					func.value()->object = scope->parentFunc->object;
+				}
 				return func;
 			}
 
@@ -74,7 +76,10 @@ namespace mlang {
 					return scope->parentFunc->GetScriptObject()->GetMember(name);
 				}
 				else if (scope->parentFunc->GetScriptObject() && scope->parentFunc->GetScriptObject()->GetType()->GetMethod(name)) {
-					return scope->parentFunc->GetUnderlyingFunc()->funcScope->FindObjectByName(name).data;
+					auto method = scope->parentFunc->GetScriptObject()->GetType()->GetMethod(name);
+					if (method)
+						method.value()->object = scope->parentFunc->GetScriptObject();
+					return method;
 				}
 				
 			}
@@ -124,6 +129,9 @@ namespace mlang {
 					}
 					else if (scope->FindObjectByName(word).data.value()) {
 						tmp = scope->FindObjectByName(word).data.value();
+					}
+					else if (scope->IsOfType(Scope::Type::CLASS) && scope->parentFunc->object->GetMember(word)) {
+						tmp = scope->parentFunc->object->GetMember(word).value();
 					}
 					else {
 						return std::nullopt;
@@ -498,34 +506,27 @@ namespace mlang {
 
 			switch (casted->op.type) {
 				case Token::Type::PLUS:
-					val += EvaluateExpr(scope, casted->rhs);
-					break;
+					return val + EvaluateExpr(scope, casted->rhs);
 				case Token::Type::MINUS:
-					val -= EvaluateExpr(scope, casted->rhs);
-					break;
+					return val - EvaluateExpr(scope, casted->rhs);
 				case Token::Type::STAR:
-					val *= EvaluateExpr(scope, casted->rhs);
-					break;
+					return val * EvaluateExpr(scope, casted->rhs);
 				case Token::Type::SLASH:
-					val /= EvaluateExpr(scope, casted->rhs);
-					break;
+					return val / EvaluateExpr(scope, casted->rhs);
 				case Token::Type::LESS:
-					val = val < EvaluateExpr(scope, casted->rhs);
-					break;
+					return val < EvaluateExpr(scope, casted->rhs);
 				case Token::Type::LEQ:
-					val = val <= EvaluateExpr(scope, casted->rhs);
-					break;
+					return val <= EvaluateExpr(scope, casted->rhs);
 				case Token::Type::GREATER:
-					val = val > EvaluateExpr(scope, casted->rhs);
-					break;
+					return val > EvaluateExpr(scope, casted->rhs);
 				case Token::Type::GEQ:
-					val = val >= EvaluateExpr(scope, casted->rhs);
-					break;
+					return val >= EvaluateExpr(scope, casted->rhs);
 				case Token::Type::NEQ:
-					val = val != EvaluateExpr(scope, casted->rhs);
-					break;
+					return val != EvaluateExpr(scope, casted->rhs);
 			}
 
+			std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " Invalid operator" << casted->op.val << "\n";
+			errCode = RespCode::ERR;
 			return val;
 		}
 		else if (expr->type == Expression::Type::FUNCCALL) {
@@ -606,7 +607,9 @@ namespace mlang {
 			}
 		}
 		if (scope->parentFunc && stmt->funcScope->parentFunc) {
-			if (scope->parentFunc->object != stmt->funcScope->parentFunc->object && stmt->funcScope->parentFunc->methodVisibility != TypeInfo::Visibility::PUBLIC) {
+			if (
+				scope->parentFunc->object != stmt->funcScope->parentFunc->object && 
+				stmt->funcScope->parentFunc->methodVisibility != TypeInfo::Visibility::PUBLIC) {
 				std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " "
 					<< "Inacessible method '" << stmt->ident.val << "' at line " << stmt->ident.row << "[" << stmt->ident.col << "]\n";
 				return RespCode::ERR;
@@ -656,6 +659,10 @@ namespace mlang {
 				return RespCode::ERR;
 			}
 		}
+
+		//if (foundFunc->isMethod && scope->parentFunc->isMethod) {
+		//	foundFunc->object = scope->parentFunc->object;
+		//}
 
 		return RunFunc(foundFunc->func, stmt->params);
 	}
@@ -782,7 +789,14 @@ namespace mlang {
 		}
 
 		auto expr = EvaluateExpr(scope, stmt->expr);
-		return foundObj->SetVal(expr);
+
+		auto retCode = foundObj->SetVal(expr);
+
+		if (retCode == RespCode::SUCCESS) {
+			std::cout << stmt->ident.val << " set to " << *reinterpret_cast<int*>(foundObj->GetAddressOfObj()) << "\n";
+		}
+
+		return retCode;
 	}
 	RespCode Module::RunStmt(Statement *stmt) {
 		switch (stmt->type) {

@@ -1,23 +1,36 @@
-class Structure {
+class A{
 	int var;
-	int var2;
 
 	public:
 	int Function(const int input) {
 		var = input;
 		return input;
 	}
+};
+class B{
+	A var;
+	int var1;
 
 	public:
 	void Func() {
 		Function(12);
+
+	}
+};
+class C{
+	B var;
+	int var2;
+
+	public:
+	void Function3(){
+		var.Function2();
+		var2 = 14;
 	}
 };
 
 int main(){	
-	Structure obj;
-
-	obj.Func();
+	C obj;
+	obj.Function3();
 
 	return 0;
 }

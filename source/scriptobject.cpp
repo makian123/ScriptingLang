@@ -93,6 +93,11 @@ namespace mlang {
 		bool otherFloat = value.valueType->name == "float" || value.valueType->name == "double";
 
 		if (thisFloat == otherFloat) {
+			// Simple memcpy for same types
+			if (type->Size() == value.valueType->Size()) {
+				memcpy(ptr, value.data, type->Size());
+				return RespCode::SUCCESS;
+			}
 			if (thisFloat) {
 				double srcVal = 0.0;
 				switch (value.valueType->Size()) {

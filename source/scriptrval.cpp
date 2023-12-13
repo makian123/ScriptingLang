@@ -601,7 +601,7 @@ namespace mlang {
 	
 	ScriptRval &ScriptRval::operator+=(const ScriptRval &other){
 		if (valueType->IsClass() || other.valueType->IsClass()) throw std::exception("Bad value type");
-		*this = *this + other;
+		*this = std::move(*this + other);
 		return *this;
 	}
 	ScriptRval &ScriptRval::operator-=(const ScriptRval &other){
@@ -862,5 +862,54 @@ namespace mlang {
 		}
 
 		return false;
+	}
+
+	ScriptRval::ScriptRval(const ScriptRval &other)
+		:engine(other.engine), valueType(other.valueType), reference(other.reference) {
+		if (reference) {
+			data = other.data;
+			return;
+		}
+
+		data = new char[valueType->Size()];
+		if (!other.valueType->IsClass()) {
+			std::memcpy(data, other.data, valueType->Size());
+			return;
+		}
+
+		for (auto &[name, member] : reinterpret_cast<ScriptObject *>(other.data)->members) {
+			auto tmp = ScriptObject::Clone(member);
+			std::memcpy(
+				reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(data) + member->GetType()->Offset()), 
+				tmp, 
+				member->GetType()->Size()
+			);
+		}
+	}
+	ScriptRval &ScriptRval::operator=(const ScriptRval &other) {
+		engine = other.engine;
+		reference = other.reference;
+		valueType = other.valueType;
+		if (reference) {
+			data = other.data;
+			return *this;
+		}
+
+		data = new char[valueType->Size()];
+		if (!other.valueType->IsClass()) {
+			std::memcpy(data, other.data, valueType->Size());
+			return *this;
+		}
+
+		for (auto &[name, member] : reinterpret_cast<ScriptObject *>(other.data)->members) {
+			auto tmp = ScriptObject::Clone(member);
+			std::memcpy(
+				reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(data) + member->GetType()->Offset()),
+				tmp,
+				member->GetType()->Size()
+			);
+		}
+
+		return *this;
 	}
 }
