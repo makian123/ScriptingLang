@@ -348,6 +348,7 @@ namespace mlang {
 		friend class Module;
 		friend class Scope;
 		friend class ScriptObject;
+		friend class ScriptRval;
 
 		TypeInfo(Engine *engine, size_t tID, const std::string &name, size_t sz, bool unsign = false, size_t off = 0, TypeInfo *parentClass_ = nullptr, bool isClass_ = false)
 			: engine(engine), typeID(tID), name(name), typeSz(sz), unsig(unsign), offset(off), parentClass(parentClass_), isClass(isClass_) {}
@@ -387,7 +388,7 @@ namespace mlang {
 		};
 
 		private:
-		TypeInfo *type = nullptr;
+		const TypeInfo *type;
 		Engine *engine;
 		std::string identifier;
 		void *ptr = nullptr;
@@ -405,8 +406,8 @@ namespace mlang {
 		friend class TypeInfo;
 		friend class ScriptRval;
 
-		ScriptObject(Engine *engine, TypeInfo *type, Modifier mods = (Modifier)0, bool shouldAlloc = true, ScriptObject *parentClass = nullptr);
-		ScriptObject(Engine *engine, TypeInfo *type, ScriptRval &rvalue, Modifier mods = (Modifier)0, bool alloc = true, ScriptObject *parentClass = nullptr);
+		ScriptObject(Engine *engine, const TypeInfo *type, Modifier mods = (Modifier)0, bool shouldAlloc = true, ScriptObject *parentClass = nullptr);
+		ScriptObject(Engine *engine, const TypeInfo *type, ScriptRval &rvalue, Modifier mods = (Modifier)0, bool alloc = true, ScriptObject *parentClass = nullptr);
 		~ScriptObject();
 
 		TypeInfo const *GetType() const { return type; }
@@ -447,7 +448,7 @@ namespace mlang {
 		friend class Module;
 		friend class Scope;
 
-		ScriptFunc(const std::string &name, size_t params, FuncStmt *stmt = nullptr, TypeInfo *ret = nullptr, bool method = false, bool constMethod = false)
+		ScriptFunc(const std::string &name, size_t params, FuncStmt *stmt = nullptr, TypeInfo *ret = nullptr, bool method = false, ScriptObject *obj = nullptr, bool constMethod = false)
 			: name(name), paramCount(params), func(stmt), returnType(ret), isMethod(method), isConstMethod(constMethod) {}
 
 		void SetClassObject(ScriptObject *obj);
@@ -467,25 +468,29 @@ namespace mlang {
 	};
 	class ScriptRval final {
 		Engine *engine = nullptr;
-		const TypeInfo *valueType = nullptr;
+		const TypeInfo *valueType;
 		void *data = nullptr;
 		bool reference;
 
-		ScriptRval(Engine *engine_ = nullptr, bool isReference_ = false) : engine(engine_), reference(isReference_) {}
+		ScriptRval(Engine *engine_, const TypeInfo *valueType_, bool isReference_ = false) : engine(engine_), valueType(valueType_), reference(isReference_) {}
 		public:
 		friend class Engine;
 		friend class Module;
 		friend class Scope;
 		friend class ScriptObject;
 
+		ScriptRval(ScriptRval &&other) noexcept;
+		ScriptRval(const ScriptRval &other);
+
 		~ScriptRval() {
-			if (!reference)
-				delete data;
+			if (reference) return;
+			if (!valueType->isClass) delete data;
+			else delete reinterpret_cast<ScriptObject *>(data);
 		}
 
 		template<Rvalueable T>
 		static ScriptRval Create(Engine *engine, const TypeInfo *type, const T &data, bool isReference = false) {
-			ScriptRval ret(engine, isReference);
+			ScriptRval ret(engine, type, isReference);
 			ret.valueType = type;
 
 			if(!isReference)
@@ -512,8 +517,8 @@ namespace mlang {
 			else if constexpr (std::is_same_v<T, ScriptRval>) {
 				if constexpr (std::is_pointer_v<T>)
 					ret.data = data;
-				else 
-					std::memcpy(ret.data, data.data, type->Size());
+				else
+					ret = data;
 			}
 
 			return ret;
@@ -536,6 +541,9 @@ namespace mlang {
 		ScriptRval &operator-=(const ScriptRval &other);
 		ScriptRval &operator*=(const ScriptRval &other);
 		ScriptRval &operator/=(const ScriptRval &other);
+
+		ScriptRval &operator=(const ScriptRval &other);
+		ScriptRval &operator=(ScriptRval &&other) noexcept;
 
 		operator bool() const;
 
@@ -574,7 +582,7 @@ namespace mlang {
 		Expression *ParsePrimaryExpr();
 		Expression *ParseExpression(int precedence = 0);
 
-		std::optional<std::variant<ScriptFunc*, ScriptObject*>> NameResolution(const std::string &name);
+		std::optional<std::variant<ScriptFunc*, ScriptObject*>> NameResolution(const std::string &name, Scope *scope = nullptr);
 
 		RespCode ParseClass();
 		Statement *ParseBlock();
@@ -633,7 +641,7 @@ namespace mlang {
 		std::vector<ScriptFunc *> funcs;
 		Engine *engine;
 		Scope *parent;
-		ScriptRval returnObj;
+		std::unique_ptr<ScriptRval> returnObj;
 
 		public:
 		friend class Module;

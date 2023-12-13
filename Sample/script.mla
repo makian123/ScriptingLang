@@ -3,13 +3,14 @@ class Structure {
 	int var2;
 
 	public:
-	int Function(const int input) const {
+	int Function(const int input) {
+		var = input;
 		return input;
 	}
 
 	public:
 	void Func() {
-		var = 41;
+		Function(12);
 	}
 };
 

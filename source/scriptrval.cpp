@@ -3,18 +3,52 @@
 #include <utility>
 
 namespace mlang {
-	ScriptRval ScriptRval::CreateFromLiteral(Engine *engine, const std::string &data) {
-		ScriptRval ret(engine, false);
+	ScriptRval::ScriptRval(ScriptRval &&other) noexcept
+		: engine(other.engine), valueType(other.valueType), reference(other.reference), data(std::exchange(other.data, nullptr)) {}
+	ScriptRval::ScriptRval(const ScriptRval &other)
+		: engine(other.engine), valueType(other.valueType), reference(other.reference) {
+		if (reference) {
+			data = other.data;
+			return;
+		}
 
+		if (!valueType->IsClass()) {
+			data = new char[valueType->Size()];
+			memcpy(data, other.data, valueType->Size());
+			return;
+		}
+		data = new ScriptObject(engine, valueType);
+		auto cast = reinterpret_cast<ScriptObject *>(data);
+		
+		for (auto &[name, member] : valueType->members) {
+			if (!member->IsClass()) {
+				memcpy(
+					reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(cast->ptr) + member->offset),
+					reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(cast->ptr) + member->offset),
+					member->Size()
+				);
+				continue;
+			}
+
+			cast->members[name] = ScriptObject::Clone(reinterpret_cast<ScriptObject *>(member));
+		}
+	}
+	ScriptRval ScriptRval::CreateFromLiteral(Engine *engine, const std::string &data) {
 		if (data.find('.') != std::string::npos) {
 			try {
-				ret.valueType = engine->GetTypeInfoByName("float");
+				auto type = engine->GetTypeInfoByName("float");
+
+				ScriptRval ret{engine, type};
 				ret.data = new float(std::stof(data));
+				return ret;
 			}
 			catch (std::out_of_range&) {
 				try {
-					ret.valueType = engine->GetTypeInfoByName("double");
+					auto type = engine->GetTypeInfoByName("double");
+
+					ScriptRval ret{ engine, type };
 					ret.data = new double(std::stod(data));
+					return ret;
 				}
 				catch (std::out_of_range&) {
 					throw std::exception("Invalid literal size");
@@ -26,21 +60,26 @@ namespace mlang {
 		}
 		else {
 			try {
-				ret.valueType = engine->GetTypeInfoByName("int");
+				auto type = engine->GetTypeInfoByName("int");
+
+				ScriptRval ret{ engine, type };
 				ret.data = new int32_t(std::stoi(data));
+				return ret;
+				
 			}
 			catch (std::out_of_range&) {
 				try {
-					ret.valueType = engine->GetTypeInfoByName("long");
-					ret.data = new int64_t(std::stoll(data));
+					auto type = engine->GetTypeInfoByName("long");
+
+					ScriptRval ret{ engine, type };
+					ret.data = new int32_t(std::stoll(data));
+					return ret;
 				}
 				catch (std::out_of_range&) {
 					throw std::exception("Invalid literal size");
 				}
 			}
 		}
-
-		return ret;
 	}
 
 	ScriptRval ScriptRval::operator+(const ScriptRval &other) const {
@@ -754,6 +793,51 @@ namespace mlang {
 		*reinterpret_cast<bool*>(ret.data) = !*reinterpret_cast<bool *>(ret.data);
 
 		return ret;
+	}
+
+	ScriptRval &ScriptRval::operator=(const ScriptRval &other) {
+		if (this->data) {
+			this->~ScriptRval();
+		}
+		this->engine = other.engine;
+		this->valueType = other.valueType;
+		this->reference = other.reference;
+
+		if (reference) {
+			data = other.data;
+			return *this;
+		}
+
+		if (!valueType->IsClass()) {
+			std::memcpy(this->data, other.data, valueType->Size());
+			return *this;
+		}
+
+		auto cast = new ScriptObject(engine, valueType);
+		data = cast;
+		for (auto &[name, member] : reinterpret_cast<ScriptObject *>(other.data)->members) {
+			if (member->IsModifier(ScriptObject::Modifier::REFERENCE)) {
+				cast->members[name] = new ScriptObject(engine, member->GetType(), member->modifiers, false);
+				cast->members[name]->ptr = member->ptr;
+				continue;
+			}
+
+			cast->members[name] = ScriptObject::Clone(member);
+		}
+
+		return *this;
+	}
+	ScriptRval &ScriptRval::operator=(ScriptRval &&other) noexcept {
+		if (this->data) {
+			this->~ScriptRval();
+		}
+
+		this->engine = other.engine;
+		this->valueType = other.valueType;
+		this->reference = other.reference;
+		this->data = std::exchange(other.data, nullptr);
+
+		return *this;
 	}
 
 	ScriptRval::operator bool() const {

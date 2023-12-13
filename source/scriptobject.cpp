@@ -4,7 +4,7 @@
 #include <cstring>
 
 namespace mlang {
-	ScriptObject::ScriptObject(Engine *engine, TypeInfo *type, Modifier mods, bool alloc, ScriptObject *parentClass)
+	ScriptObject::ScriptObject(Engine *engine, const TypeInfo *type, Modifier mods, bool alloc, ScriptObject *parentClass)
 		: engine(engine), type(type), modifiers(mods), shouldDealloc(alloc), parentClass(parentClass) {
 		if (!IsModifier(Modifier::REFERENCE)) {
 			if (alloc) {
@@ -27,7 +27,7 @@ namespace mlang {
 			refCount = 1;
 		}
 	}
-	ScriptObject::ScriptObject(Engine *engine, TypeInfo *type, ScriptRval &rvalue, Modifier mods, bool alloc, ScriptObject *parentClass)
+	ScriptObject::ScriptObject(Engine *engine, const TypeInfo *type, ScriptRval &rvalue, Modifier mods, bool alloc, ScriptObject *parentClass)
 		: ScriptObject(engine, type, mods, alloc, parentClass){
 		SetVal(rvalue);
 	}
