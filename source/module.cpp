@@ -65,7 +65,7 @@ namespace mlang {
 			else if (scope->FindFuncByName(name).data.value()) {
 				auto func = scope->FindFuncByName(name).data.value();
 				if (func->isMethod) {
-					func.value()->object = scope->parentFunc->object;
+					func->object = scope->parentFunc->object;
 				}
 				return func;
 			}

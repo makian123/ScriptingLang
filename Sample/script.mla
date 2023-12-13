@@ -12,9 +12,8 @@ class B{
 	int var1;
 
 	public:
-	void Func() {
+	void Function2() {
 		Function(12);
-
 	}
 };
 class C{
@@ -22,9 +21,13 @@ class C{
 	int var2;
 
 	public:
-	void Function3(){
+	void Function() {
+		var2 = 11;
+	}
+
+	void Function3() const {
 		var.Function2();
-		var2 = 14;
+		Function();
 	}
 };
 

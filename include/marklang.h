@@ -541,7 +541,6 @@ namespace mlang {
 		ScriptRval &operator-=(const ScriptRval &other);
 		ScriptRval &operator*=(const ScriptRval &other);
 		ScriptRval &operator/=(const ScriptRval &other);
-		ScriptRval &operator=(const ScriptRval &other);
 
 		ScriptRval &operator=(const ScriptRval &other);
 		ScriptRval &operator=(ScriptRval &&other) noexcept;
