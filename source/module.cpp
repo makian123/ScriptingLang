@@ -107,8 +107,9 @@ namespace mlang {
 					else if (object->GetType()->GetMethod(word)) {
 						tmp = object->GetType()->GetMethod(word);
 						if (tmp) {
-							std::get<ScriptFunc *>(tmp.value())->SetClassObject(object);
-							std::get<ScriptFunc *>(tmp.value())->func->funcScope->parentFunc = std::get<ScriptFunc *>(tmp.value());
+							auto func = std::get<ScriptFunc *>(tmp.value());
+							func->SetClassObject(object);
+							func->func->funcScope->parentFunc = std::get<ScriptFunc *>(tmp.value());
 						}
 					}
 					else if (scope->parentFunc && scope->IsOfType(Scope::Type::CLASS)) {
@@ -543,9 +544,15 @@ namespace mlang {
 			if (!funcFind) return ScriptRval::CreateFromLiteral(engine, "0");
 			if (funcFind->returnType->GetName() == "void") return ScriptRval::CreateFromLiteral(engine, "0");
 
-			auto r = RunFunc(funcFind->GetUnderlyingFunc(), casted->params); assert(r == RespCode::SUCCESS);
+			FuncCallStmt stmt(casted->funcName, casted->params);
+			auto r = RunFuncCall(&stmt); assert(r == RespCode::SUCCESS);
 
-			return *funcFind->func->funcScope->returnObj.get();
+			if(funcFind->func->funcScope->returnObj.get())
+				return *funcFind->func->funcScope->returnObj.get();
+			else {
+				errCode = RespCode::ERR;
+				return ScriptRval::CreateEmpty();
+			}
 		}
 
 		errCode = RespCode::ERR;
@@ -630,7 +637,27 @@ namespace mlang {
 			//CopyObjInto(foundParam.value(), &tmpObj);
 		}
 
-		auto retCode = RunBlockStmt(dynamic_cast<BlockStmt *>(stmt->block));
+		auto retCode = RespCode::ERR;
+		if (stmt->funcScope->parentFunc && stmt->funcScope->parentFunc->callbackFunc) {
+			std::vector<ScriptRval> rvals;
+			for (auto &param : params) {
+				rvals.push_back(EvaluateExpr(stmt->funcScope->parentFunc->func->funcScope, param));
+			}
+			if (stmt->funcScope->parentFunc->object && stmt->funcScope->parentFunc->isMethod) {
+				rvals.insert(rvals.begin(), (ScriptRval::Create<ScriptObject *>(engine, stmt->funcScope->parentFunc->object->GetType(), stmt->funcScope->parentFunc->object, true)));
+			}
+			auto ret = stmt->funcScope->parentFunc->callbackFunc(engine, rvals);
+			if (!engine->GetScope()->returnObj) {
+				engine->GetScope()->returnObj = std::make_unique<ScriptRval>(ret);
+			}
+			else {
+				*engine->GetScope()->returnObj.get() = ret;
+			}
+			retCode = RespCode::SUCCESS;
+		}
+		else {
+			retCode = RunBlockStmt(dynamic_cast<BlockStmt *>(stmt->block));
+		}
 		engine->SetScope(scope);
 
 		return retCode;
@@ -659,10 +686,6 @@ namespace mlang {
 				return RespCode::ERR;
 			}
 		}
-
-		//if (foundFunc->isMethod && scope->parentFunc->isMethod) {
-		//	foundFunc->object = scope->parentFunc->object;
-		//}
 
 		return RunFunc(foundFunc->func, stmt->params);
 	}

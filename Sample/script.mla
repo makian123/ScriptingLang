@@ -1,39 +1,6 @@
-class A{
+int main() {
 	int var;
-
-	public:
-	int Function(const int input) {
-		var = input;
-		return input;
-	}
-};
-class B{
-	A var;
-	int var1;
-
-	public:
-	void Function2() {
-		Function(12);
-	}
-};
-class C{
-	B var;
-	int var2;
-
-	public:
-	void Function() {
-		var2 = 11;
-	}
-
-	void Function3() const {
-		var.Function2();
-		Function();
-	}
-};
-
-int main(){	
-	C obj;
-	obj.Function3();
-
+	Getter obj;
+	var = obj.Get();
 	return 0;
 }

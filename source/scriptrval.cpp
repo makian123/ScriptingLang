@@ -7,11 +7,13 @@ namespace mlang {
 		: engine(other.engine), valueType(other.valueType), reference(other.reference), data(std::exchange(other.data, nullptr)) {}
 	ScriptRval::ScriptRval(const ScriptRval &other)
 		: engine(other.engine), valueType(other.valueType), reference(other.reference) {
+		if (!valueType) {
+			return;
+		}
 		if (reference) {
 			data = other.data;
 			return;
 		}
-
 		if (!valueType->IsClass()) {
 			data = new char[valueType->Size()];
 			memcpy(data, other.data, valueType->Size());
@@ -808,7 +810,7 @@ namespace mlang {
 			return *this;
 		}
 
-		if (!valueType->IsClass()) {
+		if (!valueType->IsClass() && this->data) {
 			std::memcpy(this->data, other.data, valueType->Size());
 			return *this;
 		}

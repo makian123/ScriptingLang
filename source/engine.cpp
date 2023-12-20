@@ -84,4 +84,32 @@ namespace mlang {
 	TypeInfo *Engine::GetTypeInfoByName(const std::string &name) const {
 		return globalScope->FindTypeInfoByName(name).data.value();
 	}
+
+	RespCode Engine::RegisterFunction(const std::string &name, const std::vector<std::pair<TypeInfo *, std::string>> &paramTypes, TypeInfo *returnType, std::function<ScriptRval(Engine*, std::vector<ScriptRval>)> func) {
+		globalScope->funcs.push_back(new ScriptFunc(
+			name, paramTypes.size(), nullptr, returnType
+		));
+		auto createdFunc = globalScope->funcs.back();
+
+		createdFunc->callbackFunc = std::bind(func, this, std::placeholders::_2);
+		std::vector<Statement *> stmts;
+		for (auto &[type, name] : paramTypes) {
+			createdFunc->types.push_back(const_cast<TypeInfo*>(type));
+
+			stmts.push_back(new VarDeclStmt(
+				Token(Token::Type::IDENTIFIER, type->GetName()),
+				Token(Token::Type::IDENTIFIER, type->GetName()),
+				nullptr
+			));
+		}
+		createdFunc->func = new FuncStmt(
+			stmts, 
+			nullptr, 
+			Token(Token::Type::IDENTIFIER, returnType->GetName()), 
+			Token(Token::Type::IDENTIFIER, name)
+		);
+		createdFunc->func->funcScope = globalScope->AddChild(static_cast<int>(Scope::Type::FUNCTION));
+
+		return RespCode::SUCCESS;
+	}
 }

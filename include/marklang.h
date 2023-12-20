@@ -60,7 +60,7 @@ namespace mlang {
 		TypeInfo *GetTypeInfoByIdx(size_t idx) const;
 		TypeInfo *GetTypeInfoByName(const std::string &name) const;
 
-		RespCode RegisterFunction(const std::string &name, const std::string &params, TypeInfo *returnType, const std::function<ScriptRval()> &func);
+		RespCode RegisterFunction(const std::string &name, const std::vector<std::pair<TypeInfo *, std::string>> &paramTypes, TypeInfo *returnType, std::function<ScriptRval(Engine*, std::vector<ScriptRval>)> func);
 
 		size_t GenerateTID() { return typeIndex++; }
 	};
@@ -372,7 +372,8 @@ namespace mlang {
 			if (!members.contains(name)) return std::nullopt;
 			return members.at(name);
 		}
-
+		
+		RespCode RegisterMethod(const std::string &name, TypeInfo *retType, bool constant, const std::vector<std::pair<std::string, TypeInfo*>> &params, std::function<ScriptRval(Engine*, std::vector<ScriptRval>)>);
 		RespCode AddMethod(const std::string &name, ScriptFunc *function);
 		inline std::optional<ScriptFunc *> GetMethod(const std::string &name) const {
 			if (!methods.contains(name)) return std::nullopt;
@@ -423,6 +424,7 @@ namespace mlang {
 		void SetAddress(void *ptr);
 		void *GetAddressOfObj() const { return ptr; }
 
+		RespCode SetVal(ScriptRval &&value);
 		RespCode SetVal(ScriptRval &value);
 		RespCode SetVal(const ScriptObject *value);
 
@@ -440,6 +442,10 @@ namespace mlang {
 		FuncStmt *func = nullptr;
 		ScriptObject *object = nullptr;
 
+		// Reference function
+		std::function<ScriptRval(Engine*, std::vector<ScriptRval>)> callbackFunc;
+		std::vector<TypeInfo *> types;
+
 		TypeInfo *returnType;
 		bool isMethod, isConstMethod;
 		TypeInfo::Visibility methodVisibility = TypeInfo::Visibility::PUBLIC;
@@ -448,6 +454,7 @@ namespace mlang {
 		friend class Engine;
 		friend class Module;
 		friend class Scope;
+		friend class TypeInfo;
 
 		ScriptFunc(const std::string &name, size_t params, FuncStmt *stmt = nullptr, TypeInfo *ret = nullptr, bool method = false, ScriptObject *obj = nullptr, bool constMethod = false)
 			: name(name), paramCount(params), func(stmt), returnType(ret), isMethod(method), isConstMethod(constMethod) {}
@@ -469,9 +476,9 @@ namespace mlang {
 	};
 	class ScriptRval final {
 		Engine *engine = nullptr;
-		const TypeInfo *valueType;
+		const TypeInfo *valueType = nullptr;
 		void *data = nullptr;
-		bool reference;
+		bool reference = false;
 
 		ScriptRval(Engine *engine_, const TypeInfo *valueType_, bool isReference_ = false) : engine(engine_), valueType(valueType_), reference(isReference_) {}
 		public:
@@ -483,7 +490,7 @@ namespace mlang {
 		ScriptRval(ScriptRval &&other) noexcept;
 		ScriptRval(const ScriptRval &other);
 		~ScriptRval() {
-			if (reference) return;
+			if (reference || !valueType) return;
 			if (!valueType->isClass) delete data;
 			else delete reinterpret_cast<ScriptObject *>(data);
 		}
@@ -524,6 +531,10 @@ namespace mlang {
 			return ret;
 		}
 
+		static ScriptRval CreateEmpty() {
+			return ScriptRval(nullptr, nullptr);
+		}
+
 		// Only works on primitives
 		static ScriptRval CreateFromLiteral(Engine *engine, const std::string &data);
 
@@ -548,6 +559,7 @@ namespace mlang {
 		operator bool() const;
 
 		RespCode SetValue(const ScriptRval &other);
+		const void *GetValue() const { return data; }
 	};
 	
 	class Module final {
@@ -670,6 +682,14 @@ namespace mlang {
 
 		Response<ScriptObject*> FindObjectByName(const std::string &name) const;
 		Response<ScriptFunc *> FindFuncByName(const std::string &name) const;
+
+		ScriptObject *GetClassScope() {
+			if (!parentFunc) return nullptr;
+			return parentFunc->object;
+		}
+		ScriptFunc *GetParentFunction() {
+			return parentFunc;
+		}
 
 		void DebugPrint(int depth = 0) const;
 	};

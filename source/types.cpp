@@ -38,4 +38,24 @@ namespace mlang {
 
 		return RespCode::SUCCESS;
 	}
+	RespCode TypeInfo::RegisterMethod(
+		const std::string &name, 
+		TypeInfo *retType, 
+		bool constant, 
+		const std::vector<std::pair<std::string, TypeInfo *>> &params, 
+		std::function<ScriptRval(Engine*, std::vector<ScriptRval>)> callback) {
+		ScriptFunc *newFunc = new ScriptFunc(name, params.size(), nullptr, retType, true, nullptr, constant);
+
+		newFunc->callbackFunc = std::bind(callback, engine, std::placeholders::_2);
+		std::vector<Statement*> paramNames;
+		//paramNames.push_back(new VarDeclStmt(Token(Token::Type::IDENTIFIER, GetName()), Token(Token::Type::IDENTIFIER, "this"), nullptr));
+		for (auto &[name, type] : params) {
+			paramNames.push_back(new VarDeclStmt(Token(Token::Type::IDENTIFIER, type->GetName()), Token(Token::Type::IDENTIFIER, name), nullptr));
+		}
+		newFunc->func = new FuncStmt(paramNames, nullptr, Token(Token::Type::IDENTIFIER, retType->GetName()), Token(Token::Type::IDENTIFIER, name));
+		newFunc->func->funcScope = new Scope(engine, engine->GetScope(), static_cast<int>(Scope::Type::FUNCTION));
+		methods[name] = newFunc;
+
+		return RespCode::SUCCESS;
+	}
 }
