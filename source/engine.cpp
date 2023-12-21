@@ -98,7 +98,7 @@ namespace mlang {
 
 			stmts.push_back(new VarDeclStmt(
 				Token(Token::Type::IDENTIFIER, type->GetName()),
-				Token(Token::Type::IDENTIFIER, type->GetName()),
+				Token(Token::Type::IDENTIFIER, name),
 				nullptr
 			));
 		}
@@ -109,6 +109,7 @@ namespace mlang {
 			Token(Token::Type::IDENTIFIER, name)
 		);
 		createdFunc->func->funcScope = globalScope->AddChild(static_cast<int>(Scope::Type::FUNCTION));
+		createdFunc->func->funcScope->parentFunc = createdFunc;
 
 		return RespCode::SUCCESS;
 	}

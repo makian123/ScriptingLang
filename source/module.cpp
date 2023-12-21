@@ -605,7 +605,7 @@ namespace mlang {
 	}
 	RespCode Module::RunFunc(FuncStmt *stmt, std::vector<Expression *> params) {
 		auto scope = engine->GetScope();
-		if (stmt->funcScope->parentFunc->object) {
+		if (stmt->funcScope->parentFunc && stmt->funcScope->parentFunc->object) {
 			if (!stmt->funcScope->parentFunc->isConstMethod && stmt->funcScope->parentFunc->object->IsModifier(ScriptObject::Modifier::CONST)) {
 				std::cerr << __FUNCTION_NAME__ << " " << __LINE__ << " "
 					<< "Calling non const function '" << stmt->ident.val << "' of const object '" << stmt->funcScope->parentFunc->object->GetName()
@@ -623,18 +623,17 @@ namespace mlang {
 			}
 		}
 
+		stmt->funcScope->parent = scope;
 		engine->SetScope(stmt->funcScope);
 		for (size_t i = 0; i < stmt->params.size(); ++i) {
 			auto funcParam = dynamic_cast<VarDeclStmt*>(stmt->params[i]);
-			auto providedValue = EvaluateExpr(stmt->funcScope, params[i]);
+			// The funcScope->parent makes sure it can get parameters from the parent function scope
+			auto providedValue = EvaluateExpr(stmt->funcScope->parent, params[i]);
 
 			auto foundParam = stmt->funcScope->FindObjectByName(funcParam->ident.val).data;
-			if (!foundParam) continue;
+			if (!foundParam || !foundParam.value()) continue;
 
 			foundParam.value()->SetVal(providedValue);
-			//ScriptObject tmpObj(engine, engine->GetScope()->FindTypeInfoByName("double").data.value());
-			//*reinterpret_cast<double *>(tmpObj.ptr) = providedValue;
-			//CopyObjInto(foundParam.value(), &tmpObj);
 		}
 
 		auto retCode = RespCode::ERR;
@@ -659,6 +658,7 @@ namespace mlang {
 			retCode = RunBlockStmt(dynamic_cast<BlockStmt *>(stmt->block));
 		}
 		engine->SetScope(scope);
+		stmt->funcScope->parent = nullptr;
 
 		return retCode;
 	}

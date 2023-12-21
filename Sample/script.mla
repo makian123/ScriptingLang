@@ -1,6 +1,5 @@
 int main() {
-	int var;
-	Getter obj;
-	var = obj.Get();
+	int var = 152;
+	Print(var);
 	return 0;
 }

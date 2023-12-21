@@ -22,6 +22,42 @@ mlang::ScriptRval TestStringFunc(mlang::Engine *engine, std::vector<mlang::Scrip
 	);
 }
 
+mlang::ScriptRval CustomPrint(mlang::Engine *engine, std::vector<mlang::ScriptRval> params) {
+	auto type = params[0].GetType();
+	if (type->IsClass()) {
+		std::cout << "Invalid variable type: " << type->GetName() << "\n";
+		return mlang::ScriptRval::CreateEmpty();
+	}
+
+	if (type->GetName() != "float" && type->GetName() != "double") {
+		switch (type->Size()) {
+			case 1:
+				if (type->IsUnsigned()) std::cout << *reinterpret_cast<const uint8_t *>(params[0].GetValue());
+				else std::cout << *reinterpret_cast<const int8_t *>(params[0].GetValue());
+				break;
+			case 2:
+				if (type->IsUnsigned()) std::cout << *reinterpret_cast<const uint16_t *>(params[0].GetValue());
+				else std::cout << *reinterpret_cast<const int16_t *>(params[0].GetValue());
+				break;
+			case 4:
+				if (type->IsUnsigned()) std::cout << *reinterpret_cast<const uint32_t *>(params[0].GetValue());
+				else std::cout << *reinterpret_cast<const int32_t *>(params[0].GetValue());
+				break;
+			case 8:
+				if(type->IsUnsigned()) std::cout << *reinterpret_cast<const uint64_t *>(params[0].GetValue());
+				else std::cout << *reinterpret_cast<const int64_t *>(params[0].GetValue());
+				break;
+		}
+	}
+	else {
+		if((type->GetName() == "float")) std::cout << *reinterpret_cast<const float*>(params[0].GetValue());
+		else std::cout << *reinterpret_cast<const double *>(params[0].GetValue());
+	}
+	std::cout << std::endl;
+
+	return mlang::ScriptRval::CreateEmpty();
+}
+
 int main() {
 	using mlang::ScriptRval;
 	mlang::Engine engine;
@@ -38,9 +74,14 @@ int main() {
 		engine.GetTypeInfoByName("void"),
 		std::function(EmptyFunction)
 	);
-	engine.RegisterGlobalType("Getter", 4, nullptr, 0, true);
-	engine.GetTypeInfoByName("Getter")->AddMember("testVar", engine.GetTypeInfoByName("int"));
-	engine.GetTypeInfoByName("Getter")->RegisterMethod("Get", engine.GetTypeInfoByName("int"), false, {}, std::function(TestStringFunc));
+	engine.RegisterFunction(
+		"Print",
+		std::vector<std::pair<mlang::TypeInfo *, std::string>>{
+			{engine.GetTypeInfoByName("int"), "src" }
+		},
+		engine.GetTypeInfoByName("void"),
+		std::function(CustomPrint)
+	);
 
 	// Adds code from file
 	r = mod->AddSectionFromFile("script.mla"); assert(r == mlang::RespCode::SUCCESS);

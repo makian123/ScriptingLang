@@ -560,6 +560,8 @@ namespace mlang {
 
 		RespCode SetValue(const ScriptRval &other);
 		const void *GetValue() const { return data; }
+
+		const TypeInfo *GetType() const { return valueType; }
 	};
 	
 	class Module final {
